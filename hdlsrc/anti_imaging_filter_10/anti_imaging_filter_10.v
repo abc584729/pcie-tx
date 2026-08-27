@@ -54,7 +54,8 @@ module anti_imaging_filter_10
                 clk_enable,
                 reset,
                 filter_in,
-                filter_out
+                filter_out,
+                filter_out_valid
                 );
 
   input   clk; 
@@ -62,6 +63,7 @@ module anti_imaging_filter_10
   input   reset; 
   input   signed [15:0] filter_in; //sfix16_En15
   output  signed [15:0] filter_out; //sfix16_En15
+  output  filter_out_valid;
 
 ////////////////////////////////////////////////////////////////
 //Module Architecture: anti_imaging_filter_10
@@ -1164,4 +1166,18 @@ module anti_imaging_filter_10
 
   // Assignment Statements
   assign filter_out = output_register;
+
+  // filter_out_valid: output sample valid, aligned with output_register.
+  // Pipeline latency = 27 clk_enable events (26-tap + under_pipe +
+  // product_pipe + output_register); delay clk_enable by the same depth.
+  reg [26:0] ce_delay;
+  always @(posedge clk or posedge reset) begin
+    if (reset == 1'b1) begin
+      ce_delay <= 0;
+    end
+    else if (clk_enable == 1'b1) begin
+      ce_delay <= {ce_delay[25:0], 1'b1};
+    end
+  end
+  assign filter_out_valid = ce_delay[26];
 endmodule  // anti_imaging_filter_10

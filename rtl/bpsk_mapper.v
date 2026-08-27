@@ -22,38 +22,16 @@
 
 module bpsk_mapper(
     input clk, rst_n,
-    input bit,
+    input bit, bit_valid,
     output reg sig_valid,
-    output reg [15:0] sig,
+    output reg [15:0] sig
     );
-    
-    // ·ûºÅËÙÂÊ£º450khz
-    parameter COUNT_MAX = 9'd400;
 
-    reg [8:0] count;
-    always @(posedge clk or negedge rst_n) begin
-        if(!rst_n) count <= 0;
-        else begin
-            if(count < COUNT_MAX-1) count <= count + 1;
-            else count <= 0;
-        end
-    end
-
-    // ÓĞĞ§±êÖ¾
-    reg flag;
-    always @(posedge clk or negedge rst_n) begin
-        if(!rst_n) flag <= 0;
-        else begin
-            if(count == COUNT_MAX-1) flag <= 1;
-            else flag <= 0;
-        end
-    end
-
-    // bpskÓ³Éä
+    // bpskÓ³ï¿½ï¿½
     always @(posedge clk or negedge rst_n) begin
         if(!rst_n) sig <= 0;
         else begin
-            if (flag) begin
+            if (bit_valid) begin
                 if (bit == 0) sig <= {1'b0,{15{1'b1}}};
                 else sig <= {1'b1,{15{1'b0}}};
             end
@@ -61,10 +39,10 @@ module bpsk_mapper(
         end
     end
 
-    // ÓĞĞ§Î»Êä³ö
+    // ï¿½ï¿½Ğ§Î»ï¿½ï¿½ï¿½
     always @(posedge clk or negedge rst_n) begin
         if(!rst_n) sig_valid <= 0;
-        else sig_valid <= flag;
+        else sig_valid <= bit_valid;
     end
 
 endmodule

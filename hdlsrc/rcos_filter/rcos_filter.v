@@ -53,7 +53,8 @@ module rcos_filter
                 clk_enable,
                 reset,
                 filter_in,
-                filter_out
+                filter_out,
+                filter_out_valid
                 );
 
   input   clk; 
@@ -61,6 +62,7 @@ module rcos_filter
   input   reset; 
   input   signed [15:0] filter_in; //sfix16_En15
   output  signed [15:0] filter_out; //sfix16_En14
+  output  filter_out_valid;
 
 ////////////////////////////////////////////////////////////////
 //Module Architecture: rcos_filter
@@ -2409,4 +2411,18 @@ module rcos_filter
 
   // Assignment Statements
   assign filter_out = output_register;
+
+  // filter_out_valid: output sample valid, aligned with output_register.
+  // Pipeline latency = 65 clk_enable events (64-tap + under_pipe +
+  // product_pipe + output_register); delay clk_enable by the same depth.
+  reg [64:0] ce_delay;
+  always @(posedge clk or posedge reset) begin
+    if (reset == 1'b1) begin
+      ce_delay <= 0;
+    end
+    else if (clk_enable == 1'b1) begin
+      ce_delay <= {ce_delay[63:0], 1'b1};
+    end
+  end
+  assign filter_out_valid = ce_delay[64];
 endmodule  // rcos_filter

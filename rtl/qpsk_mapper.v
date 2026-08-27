@@ -23,32 +23,11 @@
 module qpsk_mapper(
     input clk, rst_n,
     input [1:0] bit,
+    input [1:0] bit_valid,
     output reg sig_valid,
     output reg [15:0] i,
     output reg [15:0] q,
     );
-    
-    // 符号速率：4.5Mhz
-    parameter COUNT_MAX = 6'd40;
-
-    reg [5:0] count;
-    always @(posedge clk or negedge rst_n) begin
-        if(!rst_n) count <= 0;
-        else begin
-            if(count < COUNT_MAX-1) count <= count + 1;
-            else count <= 0;
-        end
-    end
-
-    // 有效标志
-    reg flag;
-    always @(posedge clk or negedge rst_n) begin
-        if(!rst_n) flag <= 0;
-        else begin
-            if(count == COUNT_MAX-1) flag <= 1;
-            else flag <= 0;
-        end
-    end
 
     // qpsk映射
     reg [15:0] map_i, map_q;
@@ -83,7 +62,7 @@ module qpsk_mapper(
             q <= 0;
         end
         else begin
-            if (flag) begin
+            if (bit_valid) begin
                 i <= map_i;
                 q <= map_q;
             end
@@ -96,7 +75,7 @@ module qpsk_mapper(
     // 有效位输出
     always @(posedge clk or negedge rst_n) begin
         if(!rst_n) sig_valid <= 0;
-        else sig_valid <= flag;
+        else sig_valid <= bit_valid;
     end
 
 endmodule
