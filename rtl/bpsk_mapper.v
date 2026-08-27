@@ -27,7 +27,7 @@ module bpsk_mapper(
     output reg [15:0] sig
     );
 
-    // bpskÓ³ï¿½ï¿½
+    // bpskÓ³Éä
     always @(posedge clk or negedge rst_n) begin
         if(!rst_n) sig <= 0;
         else begin
@@ -39,7 +39,7 @@ module bpsk_mapper(
         end
     end
 
-    // ï¿½ï¿½Ğ§Î»ï¿½ï¿½ï¿½
+    // ÓĞĞ§Î»
     always @(posedge clk or negedge rst_n) begin
         if(!rst_n) sig_valid <= 0;
         else sig_valid <= bit_valid;
