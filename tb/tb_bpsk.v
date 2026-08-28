@@ -44,7 +44,7 @@ module tb_bpsk(
         # 10;
         rst_n = 1;
         en = 1;
-        # 10000;
+        # 100000;
         $fclose(fp);
         $display("Simulation done, file closed successfully.");
         $stop;
