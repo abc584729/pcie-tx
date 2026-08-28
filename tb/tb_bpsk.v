@@ -30,17 +30,17 @@ module tb_bpsk(
 
     integer fp;
 
-    // Ê±ÖÓ
+    // Ê±ï¿½ï¿½
     initial begin
         clk = 0;
         forever #5 clk = ~clk;
     end
 
-    // ¼¤Àø
+    // ï¿½ï¿½ï¿½ï¿½
     initial begin
         rst_n = 0;
         en = 0;
-        fp = $fopen("D:/result.csv", "w");
+        fp = $fopen("D:/result_new.csv", "w");
         # 10;
         rst_n = 1;
         en = 1;
@@ -50,10 +50,10 @@ module tb_bpsk(
         $stop;
     end
 
-    // Ð´ÎÄ¼þ
+    // Ð´ï¿½Ä¼ï¿½
     always @(posedge clk) begin
         if (rst_n && sig_valid) begin
-            $fdisplay(fp, "%b", sig); 
+            $fdisplay(fp, "%b", sig);
         end
     end
 

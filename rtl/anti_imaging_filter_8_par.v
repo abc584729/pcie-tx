@@ -194,6 +194,6 @@ module anti_imaging_filter_8_par (
       ce_pipe <= {ce_pipe[2:0], 1'b1};
     end
   end
-  assign ce_out = ce_pipe[3];
+  assign ce_out = clk_enable & ce_pipe[3];
 
 endmodule  // anti_imaging_filter_8_par

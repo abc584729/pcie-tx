@@ -16,11 +16,15 @@ for i = 1:length(lines)
         idx2 = (8-j+1)*16;
 
         bin16 = bin128(idx1:idx2);
-        value = double(fi(bin2dec(bin16), 1, 16, 15));
+        u = bin2dec(bin16);
+        if u >= 2^15, u = u - 2^16; end 
+        value = u / 2^15;          
 
         data(end+1) = value;
     end
 end
+
+data = data(find(data ~= 0, 1):end);   
 
 %% Time domain Analysis
 fs = 180e6*8;

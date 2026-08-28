@@ -1179,5 +1179,5 @@ module anti_imaging_filter_10
       ce_delay <= {ce_delay[25:0], 1'b1};
     end
   end
-  assign filter_out_valid = ce_delay[26];
+  assign filter_out_valid = clk_enable & ce_delay[26];
 endmodule  // anti_imaging_filter_10

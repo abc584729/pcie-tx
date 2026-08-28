@@ -2424,5 +2424,5 @@ module rcos_filter
       ce_delay <= {ce_delay[63:0], 1'b1};
     end
   end
-  assign filter_out_valid = ce_delay[64];
+  assign filter_out_valid = clk_enable & ce_delay[64];
 endmodule  // rcos_filter
