@@ -40,7 +40,7 @@ module zero_interpolator#(
         else count <= count + 1;
     end
     
-wire slot = (count == 0);
+    wire slot = (count == 0);   
 
     // Latch the input sample on x_valid and emit it at the next slot
     // boundary; zeros at the other slots. Robust to any x_valid phase.

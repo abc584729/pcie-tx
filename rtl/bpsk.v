@@ -3,23 +3,15 @@
 // Company: 
 // Engineer: 
 // 
-// Create Date: 2026/08/27 14:19:44
+// Create Date: 2026/08/27 12:56:44
 // Design Name: 
 // Module Name: bpsk
 // Project Name: 
 // Target Devices: 
 // Tool Versions: 
 // Description: 
-//   BPSK TX chain: symbol RAM -> mapper -> 8x zero-pad -> rcos shaping
-//   -> 5x zero-pad -> anti_imaging_filter_5 -> 10x zero-pad
-//   -> anti_imaging_filter_10 -> 8-phase parallel anti_imaging_filter_8_par.
-//   sig[127:0] = 8 phases x sfix16_En15, valid every clock (ce_out from
-//   anti_imaging_filter_8_par is the output-group valid).
-//   Note: intermediate data alignment (FIR pipeline latency) is not yet
-//   compensated; waveform is a fixed-delay version of the MATLAB chain.
 // 
-// Dependencies: bpsk_ram, dpram, bpsk_mapper, zero_interpolator,
-//   rcos_filter, anti_imaging_filter_5/10, anti_imaging_filter_8_par
+// Dependencies: 
 // 
 // Revision:
 // Revision 0.01 - File Created
@@ -30,7 +22,8 @@
 
 module bpsk(
         input clk, rst_n, en,
-        output [127:0] sig
+        output [127:0] sig,
+        output sig_valid
     );
 
     wire reset = ~rst_n;
@@ -131,7 +124,7 @@ module bpsk(
         .reset        (reset),
         .filter_in    (s10),
         .filter_out   (sig),
-        .ce_out       ()
+        .ce_out       (sig_valid)
     );
 
 endmodule
