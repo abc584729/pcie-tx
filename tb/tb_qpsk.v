@@ -20,7 +20,7 @@
 //////////////////////////////////////////////////////////////////////////////////
 
 
-module tb_bpsk(
+module tb_qpsk(
 
     );
 
@@ -32,13 +32,13 @@ module tb_bpsk(
 
     integer fp;
 
-    // Ê±ÖÓ
+    // Ê±ï¿½ï¿½
     initial begin
         clk = 0;
         forever #5 clk = ~clk;
     end
 
-    // ³õÊ¼»¯
+    // ï¿½ï¿½Ê¼ï¿½ï¿½
     initial begin
         rst_n = 0;
         en = 0;
@@ -52,7 +52,7 @@ module tb_bpsk(
         $stop;
     end
 
-    // Ð´ÎÄ¼þ
+    // Ð´ï¿½Ä¼ï¿½
     always @(posedge clk) begin
         if (rst_n && sig_valid) begin
             $fdisplay(fp, "%b", sig_i);
