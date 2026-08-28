@@ -1,7 +1,7 @@
 clc, clear, close all; 
 
 %% read csv
-fid = fopen('result.csv', 'r');
+fid = fopen('result_bpsk.csv', 'r');
 raw = textscan(fid, '%s');
 fclose(fid);
 lines = raw{1};

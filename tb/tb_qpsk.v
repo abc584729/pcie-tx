@@ -25,7 +25,9 @@ module tb_bpsk(
     );
 
     reg clk, rst_n, en;
-    wire [127:0] sig;
+    wire [127:0] sig_i;
+    wire [127:0] sig_q;
+
     wire sig_valid;
 
     integer fp;
@@ -40,7 +42,7 @@ module tb_bpsk(
     initial begin
         rst_n = 0;
         en = 0;
-        fp = $fopen("D:/result_bpsk.csv", "w");
+        fp = $fopen("D:/result_qpsk.csv", "w");
         # 10;
         rst_n = 1;
         en = 1;
@@ -53,15 +55,17 @@ module tb_bpsk(
     // Ð´ÎÄ¼þ
     always @(posedge clk) begin
         if (rst_n && sig_valid) begin
-            $fdisplay(fp, "%b", sig);
+            $fdisplay(fp, "%b", sig_i);
+            $fdisplay(fp, "%b", sig_q);
         end
     end
 
-    bpsk dut(
+    qpsk dut(
         .clk(clk),
         .rst_n(rst_n),
         .en(en),
-        .sig(sig),
+        .sig_i(sig_i),
+        .sig_q(sig_q),
         .sig_valid(sig_valid)
     );
 

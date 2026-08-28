@@ -23,10 +23,10 @@
 module qpsk_mapper(
     input clk, rst_n,
     input [1:0] bit,
-    input [1:0] bit_valid,
+    input bit_valid,
     output reg sig_valid,
     output reg [15:0] i,
-    output reg [15:0] q,
+    output reg [15:0] q
     );
 
     // qpsk映射
@@ -66,13 +66,14 @@ module qpsk_mapper(
                 i <= map_i;
                 q <= map_q;
             end
-            else 
+            else begin
                 i <= 0;
                 q <= 0;
+            end
         end
     end
 
-    // 有效位输出
+    // 有效位输出 
     always @(posedge clk or negedge rst_n) begin
         if(!rst_n) sig_valid <= 0;
         else sig_valid <= bit_valid;
