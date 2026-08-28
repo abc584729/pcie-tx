@@ -40,7 +40,7 @@ module tb_bpsk(
     initial begin
         rst_n = 0;
         en = 0;
-        fp = $fopen("C:/Users/你的用户名/Desktop/result.csv", "w");
+        fp = $fopen("D:/result.csv", "w");
         # 10;
         rst_n = 1;
         en = 1;

@@ -1,7 +1,7 @@
 clc, clear, close all; 
 
 %% read csv
-fid = fopen('result.csv', 'r');
+fid = fopen('D:/result.csv', 'r');
 lines = textscan(fid, '%s');
 fclose(fid);
 
