@@ -1,9 +1,10 @@
 clc, clear, close all; 
 
 %% read csv
-fid = fopen('D:/result.csv', 'r');
-lines = textscan(fid, '%s');
+fid = fopen('result.csv', 'r');
+raw = textscan(fid, '%s');
 fclose(fid);
+lines = raw{1};
 
 data = [];
 
@@ -11,11 +12,11 @@ for i = 1:length(lines)
     bin128 = lines{i};
 
     for j = 1:8
-        idx1 = (j-1)*16 + 1;
-        idx2 = j*16;
+        idx1 = (8-j)*16 + 1;
+        idx2 = (8-j+1)*16;
 
         bin16 = bin128(idx1:idx2);
-        value = bin2dec(bin16)/ 2^16;
+        value = double(fi(bin2dec(bin16), 1, 16, 15));
 
         data(end+1) = value;
     end
@@ -38,6 +39,5 @@ plot(w/pi, pow2db(pxx));xlabel('\pi');
 Rs = 450e3;
 sps = fs/Rs;
 
-figure;
 eyediagram(data, 2*sps);
 grid on;

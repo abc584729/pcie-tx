@@ -59,7 +59,7 @@ module dpram #(
     reg [15:0] mem [0:DEPTH-1];
 
     initial begin
-        $readmemb("mem/ram.mem", mem);   // preload; no writes needed to read
+        $readmemb("ram.mem", mem);   // preload; no writes needed to read
     end
 
     // write port
