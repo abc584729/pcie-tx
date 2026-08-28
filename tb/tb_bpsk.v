@@ -30,13 +30,13 @@ module tb_bpsk(
 
     integer fp;
 
-    // Ê±ï¿½ï¿½
+    // Ê±ÖÓ
     initial begin
         clk = 0;
         forever #5 clk = ~clk;
     end
 
-    // ï¿½ï¿½ï¿½ï¿½
+    // ³õÊ¼»¯
     initial begin
         rst_n = 0;
         en = 0;
@@ -50,7 +50,7 @@ module tb_bpsk(
         $stop;
     end
 
-    // Ð´ï¿½Ä¼ï¿½
+    // Ð´ÎÄ¼þ
     always @(posedge clk) begin
         if (rst_n && sig_valid) begin
             $fdisplay(fp, "%b", sig);
