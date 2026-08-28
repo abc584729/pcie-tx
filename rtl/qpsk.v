@@ -21,8 +21,7 @@
 
 
 module qpsk(
-    input clk, rst_n, en
-    output [15:0] sig;
+
     );
     
 
