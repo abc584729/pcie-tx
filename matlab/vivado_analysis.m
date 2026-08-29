@@ -1,7 +1,7 @@
 clc, clear, close all; 
 
 %% read csv
-fid = fopen('result_qpsk.csv', 'r');
+fid = fopen('result.csv', 'r');
 raw = textscan(fid, '%s');
 fclose(fid);
 lines = raw{1};
@@ -46,8 +46,16 @@ subplot(212);
 w = 2*pi*f/fs;
 plot(w/pi, pow2db(pxx));xlabel('\pi');
 
-%% Eye Diagram
+%% down converter
+fc = 100e6;
+data = data.*exp(-1i*2*pi*fc*(0:length(data)-1)/fs);
+
+%% low pass filter
 Rs = 450e3;
+alpha = 0.25;
+wd = ((1+alpha)*Rs/2)/(fs)*2*pi;
+
+%% Eye Diagram
 sps = fs/Rs;
 
 eyediagram(data, 2*sps);

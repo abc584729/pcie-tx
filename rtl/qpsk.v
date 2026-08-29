@@ -1,37 +1,30 @@
 `timescale 1ns / 1ps
-////////////////////////////////////////////////////////////////////////////////
-// Company:
-// Engineer:
-//
-// Create Date: 2026/08/27 14:19:44
-// Design Name:
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// 
+// Create Date: 2026/08/27 12:56:44
+// Design Name: 
 // Module Name: qpsk
-// Project Name:
-// Target Devices:
-// Tool Versions:
-// Description: QPSK transmit chain, mirrors bpsk.v with dual I/Q
-//              lanes. Symbol rate 4.5 MHz @ 180 MHz clk (symbol
-//              period 40 clk, qpsk_ram COUNT_MAX=40). Upsampling
-//              8x (zero-ins) -> rcos -> 5x (zero-ins) -> anti-
-//              imaging 5 -> anti-imaging 8x polyphase parallel =
-//              320 samples per symbol. No 10x stage (QPSK does not
-//              use it, matches the Simulink golden 8x5x8).
-//
-// Dependencies: qpsk_ram, qpsk_mapper, zero_interpolator,
-//               rcos_filter_iq, anti_imaging_filter_5_iq,
-//               anti_imaging_filter_8_par_iq, dpram
-//
+// Project Name: 
+// Target Devices: 
+// Tool Versions: 
+// Description: 
+// 
+// Dependencies: 
+// 
 // Revision:
 // Revision 0.01 - File Created
 // Additional Comments:
-//
-////////////////////////////////////////////////////////////////////////////////
+// 
+//////////////////////////////////////////////////////////////////////////////////
 
 module qpsk(
-    input clk, rst_n, en,
-    output [127:0] sig_i,
-    output [127:0] sig_q,
-    output sig_valid
+        input clk, rst_n, en,
+        input [15:0] dds_pinc,
+        input [127:0] dds_poff,
+        input dds_rstn,
+        output [127:0] sig_i, sig_q
     );
 
     wire reset = ~rst_n;
@@ -120,15 +113,152 @@ module qpsk(
     );
 
     // 8x polyphase parallel anti-imaging -> 8 samples/clk, I/Q
+    wire [127:0] sig_i_par, sig_q_par;
     anti_imaging_filter_8_par_iq u_f8(
         .clk        (clk),
         .clk_enable (s5_valid),
         .reset      (reset),
         .filter_in_i(s_i5),
         .filter_in_q(s_q5),
-        .filter_out_i(sig_i),
-        .filter_out_q(sig_q),
+        .filter_out_i(sig_i_par),
+        .filter_out_q(sig_q_par),
         .ce_out     (sig_valid)
     );
+
+    wire [127:0] dds_i, dds_q;
+    dds_x8 u_dds_x8(
+        .clk          (clk),
+        .rst_n        (dds_rstn),
+        .pinc         (dds_pinc),
+        .poff         (dds_poff),
+        .dds_i        (dds_i),
+        .dds_q        (dds_q)
+    );
+
+    wire [15:0] i_0 = sig_i_par[15:0];
+    wire [15:0] i_1 = sig_i_par[31:16];
+    wire [15:0] i_2 = sig_i_par[47:32];
+    wire [15:0] i_3 = sig_i_par[63:48];
+    wire [15:0] i_4 = sig_i_par[79:64];
+    wire [15:0] i_5 = sig_i_par[95:80];
+    wire [15:0] i_6 = sig_i_par[111:96];
+    wire [15:0] i_7 = sig_i_par[127:112];
+
+    wire [15:0] q_0 = sig_q_par[15:0];
+    wire [15:0] q_1 = sig_q_par[31:16];
+    wire [15:0] q_2 = sig_q_par[47:32];
+    wire [15:0] q_3 = sig_q_par[63:48];
+    wire [15:0] q_4 = sig_q_par[79:64];
+    wire [15:0] q_5 = sig_q_par[95:80];
+    wire [15:0] q_6 = sig_q_par[111:96];
+    wire [15:0] q_7 = sig_q_par[127:112];
+
+    wire [31:0] cmpy_dout_0, cmpy_dout_1, cmpy_dout_2, cmpy_dout_3;
+    wire [31:0] cmpy_dout_4, cmpy_dout_5, cmpy_dout_6, cmpy_dout_7;
+
+    cmpy_0 u_cmpy_0(
+        .aclk(clk),                                          // input wire aclk
+        .aresetn(rst_n),                                     // input wire aresetn
+        .s_axis_a_tvalid(1'b1),                              // input wire s_axis_a_tvalid
+        .s_axis_a_tdata({q_0, i_0}),                         // input wire [31 : 0] s_axis_a_tdata
+        .s_axis_b_tvalid(1'b1),                              // input wire s_axis_b_tvalid
+        .s_axis_b_tdata({dds_q[15:0], dds_i[15:0]}),         // input wire [31 : 0] s_axis_b_tdata
+        .m_axis_dout_tvalid(),                               // output wire m_axis_dout_tvalid
+        .m_axis_dout_tdata(cmpy_dout_0)                      // output wire [31 : 0] m_axis_dout_tdata
+    );
+
+    cmpy_0 u_cmpy_1(
+        .aclk(clk),
+        .aresetn(rst_n),
+        .s_axis_a_tvalid(1'b1),
+        .s_axis_a_tdata({q_1, i_1}),
+        .s_axis_b_tvalid(1'b1),
+        .s_axis_b_tdata({dds_q[31:16], dds_i[31:16]}),
+        .m_axis_dout_tvalid(),
+        .m_axis_dout_tdata(cmpy_dout_1)
+    );
+
+    cmpy_0 u_cmpy_2(
+        .aclk(clk),
+        .aresetn(rst_n),
+        .s_axis_a_tvalid(1'b1),
+        .s_axis_a_tdata({q_2, i_2}),
+        .s_axis_b_tvalid(1'b1),
+        .s_axis_b_tdata({dds_q[47:32], dds_i[47:32]}),
+        .m_axis_dout_tvalid(),
+        .m_axis_dout_tdata(cmpy_dout_2)
+    );
+
+    cmpy_0 u_cmpy_3(
+        .aclk(clk),
+        .aresetn(rst_n),
+        .s_axis_a_tvalid(1'b1),
+        .s_axis_a_tdata({q_3, i_3}),
+        .s_axis_b_tvalid(1'b1),
+        .s_axis_b_tdata({dds_q[63:48], dds_i[63:48]}),
+        .m_axis_dout_tvalid(),
+        .m_axis_dout_tdata(cmpy_dout_3)
+    );
+
+    cmpy_0 u_cmpy_4(
+        .aclk(clk),
+        .aresetn(rst_n),
+        .s_axis_a_tvalid(1'b1),
+        .s_axis_a_tdata({q_4, i_4}),
+        .s_axis_b_tvalid(1'b1),
+        .s_axis_b_tdata({dds_q[79:64], dds_i[79:64]}),
+        .m_axis_dout_tvalid(),
+        .m_axis_dout_tdata(cmpy_dout_4)
+    );
+
+    cmpy_0 u_cmpy_5(
+        .aclk(clk),
+        .aresetn(rst_n),
+        .s_axis_a_tvalid(1'b1),
+        .s_axis_a_tdata({q_5, i_5}),
+        .s_axis_b_tvalid(1'b1),
+        .s_axis_b_tdata({dds_q[95:80], dds_i[95:80]}),
+        .m_axis_dout_tvalid(),
+        .m_axis_dout_tdata(cmpy_dout_5)
+    );
+
+    cmpy_0 u_cmpy_6(
+        .aclk(clk),
+        .aresetn(rst_n),
+        .s_axis_a_tvalid(1'b1),
+        .s_axis_a_tdata({q_6, i_6}),
+        .s_axis_b_tvalid(1'b1),
+        .s_axis_b_tdata({dds_q[111:96], dds_i[111:96]}),
+        .m_axis_dout_tvalid(),
+        .m_axis_dout_tdata(cmpy_dout_6)
+    );
+
+    cmpy_0 u_cmpy_7(
+        .aclk(clk),
+        .aresetn(rst_n),
+        .s_axis_a_tvalid(1'b1),
+        .s_axis_a_tdata({q_7, i_7}),
+        .s_axis_b_tvalid(1'b1),
+        .s_axis_b_tdata({dds_q[127:112], dds_i[127:112]}),
+        .m_axis_dout_tvalid(),
+        .m_axis_dout_tdata(cmpy_dout_7)
+    );
+
+    assign sig_i[15:0]    = cmpy_dout_0[15:0];
+    assign sig_q[15:0]    = cmpy_dout_0[31:16];
+    assign sig_i[31:16]   = cmpy_dout_1[15:0];
+    assign sig_q[31:16]   = cmpy_dout_1[31:16];
+    assign sig_i[47:32]   = cmpy_dout_2[15:0];
+    assign sig_q[47:32]   = cmpy_dout_2[31:16];
+    assign sig_i[63:48]   = cmpy_dout_3[15:0];
+    assign sig_q[63:48]   = cmpy_dout_3[31:16];
+    assign sig_i[79:64]   = cmpy_dout_4[15:0];
+    assign sig_q[79:64]   = cmpy_dout_4[31:16];
+    assign sig_i[95:80]   = cmpy_dout_5[15:0];
+    assign sig_q[95:80]   = cmpy_dout_5[31:16];
+    assign sig_i[111:96]  = cmpy_dout_6[15:0];
+    assign sig_q[111:96]  = cmpy_dout_6[31:16];
+    assign sig_i[127:112] = cmpy_dout_7[15:0];
+    assign sig_q[127:112] = cmpy_dout_7[31:16];
 
 endmodule
