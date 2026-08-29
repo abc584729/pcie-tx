@@ -46,17 +46,36 @@ subplot(212);
 w = 2*pi*f/fs;
 plot(w/pi, pow2db(pxx));xlabel('\pi');
 
-%% down converter
+%% BPSK branch: fc = 100 MHz, Rs = 450 kHz
 fc = 100e6;
-data = data.*exp(-1i*2*pi*fc*(0:length(data)-1)/fs);
+x = data.*exp(-1i*2*pi*fc*(0:length(data)-1)/fs);
 
-%% low pass filter
 Rs = 450e3;
 alpha = 0.25;
 wd = ((1+alpha)*Rs/2)/(fs)*2*pi;
+N = 128;
+b = fir1(N, wd/pi);
+x = filter(b, 1, x);
+x = x(N+1:end);
+x = x.*exp(-1i*angle(mean(x.^2))/2);
 
-%% Eye Diagram
 sps = fs/Rs;
 
-eyediagram(data, 2*sps);
+eyediagram(x, 2*sps);
+grid on;
+
+%% QPSK branch: fc = 200 MHz, Rs = 4.5 MHz
+fc = 200e6;
+x = data.*exp(-1i*2*pi*fc*(0:length(data)-1)/fs);
+
+Rs = 4.5e6;
+wd = ((1+alpha)*Rs/2)/(fs)*2*pi;
+b = fir1(N, wd/pi);
+x = filter(b, 1, x);
+x = x(N+1:end);
+x = x.*exp(-1i*angle(mean(x.^4))/4);
+
+sps = fs/Rs;
+
+eyediagram(x, 2*sps);
 grid on;
