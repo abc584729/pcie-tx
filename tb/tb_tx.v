@@ -54,7 +54,7 @@ module tb_tx(
         dds_rstn = 1;
         # 10;
         tx_en = 1;
-        # 100000;
+        # 1000000;
         $fclose(fp);
         $display("Simulation done, file closed successfully.");
         $stop;

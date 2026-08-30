@@ -52,14 +52,30 @@ x = data.*exp(-1i*2*pi*fc*(0:length(data)-1)/fs);
 
 Rs = 450e3;
 alpha = 0.25;
-wd = ((1+alpha)*Rs/2)/(fs)*2*pi;
+D = round(fs/(10*Rs));                   
+h = ones(1, D)/D;                    
+x = conv(x, h);
+x = x(1:D:end);
+fs2 = fs/D;
+
+wd = ((1+alpha)*Rs/2)/(fs2)*2*pi;
 N = 128;
 b = fir1(N, wd/pi);
 x = filter(b, 1, x);
 x = x(N+1:end);
-x = x.*exp(-1i*angle(mean(x.^2))/2);
 
-sps = fs/Rs;
+% de-rotation with drift tracking (pinc quantization causes slow
+% carrier phase rotation over long records)
+seg = floor(length(x)/20);
+phi_t = zeros(1,20);
+for k = 1:20
+    w = x((k-1)*seg+1 : k*seg);
+    phi_t(k) = angle(mean(w.^2));
+end
+pp = polyfit((1:20)*seg - seg/2, unwrap(phi_t), 1);
+x = x.*exp(-1i*(pp(1)*(0:length(x)-1) + pp(2))/2);
+
+sps = fs2/Rs;
 
 eyediagram(x, 2*sps);
 grid on;
@@ -69,13 +85,27 @@ fc = 200e6;
 x = data.*exp(-1i*2*pi*fc*(0:length(data)-1)/fs);
 
 Rs = 4.5e6;
-wd = ((1+alpha)*Rs/2)/(fs)*2*pi;
+D = round(fs/(10*Rs));
+h = ones(1, D)/D;
+x = conv(x, h);
+x = x(1:D:end);
+fs2 = fs/D;
+
+wd = ((1+alpha)*Rs/2)/(fs2)*2*pi;
 b = fir1(N, wd/pi);
 x = filter(b, 1, x);
 x = x(N+1:end);
-x = x.*exp(-1i*angle(mean(x.^4))/4);
 
-sps = fs/Rs;
+seg = floor(length(x)/20);
+phi_t = zeros(1,20);
+for k = 1:20
+    w = x((k-1)*seg+1 : k*seg);
+    phi_t(k) = angle(mean(w.^4));
+end
+pp = polyfit((1:20)*seg - seg/2, unwrap(phi_t), 1);
+x = x.*exp(-1i*((pp(1)*(0:length(x)-1) + pp(2))/4 - pi/4));
+
+sps = fs2/Rs;
 
 eyediagram(x, 2*sps);
 grid on;
