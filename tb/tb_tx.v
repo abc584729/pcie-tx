@@ -48,8 +48,8 @@ module tb_tx(
         rst_n = 1;
         dds_pinc_bpsk = 16'h8E39;    // 100mhz: 65536*100/180 = 36409
         dds_pinc_qpsk = 16'h1C72;    // 200mhz: 65536*200/180 = 72818 -> mod 2^16 = 7282
-        dds_poff_bpsk = 128'h7C72_6AAB_58E4_471C_3555_238E_11C7_0000;    // lane k: k*36409/8
-        dds_poff_qpsk = 128'hF8E4_D555_B1C7_8E39_6AAB_471C_238E_0000;    // lane k: k*72818/8 mod 2^16
+        dds_poff_bpsk = 128'h838E_9555_A71C_B8E4_CAAB_DC72_EE39_0000;    // lane k: -k*36409/8 (dds negates streamed poff)
+        dds_poff_qpsk = 128'h071C_2AAB_4E39_71C7_9555_B8E4_DC72_0000;    // lane k: -k*72818/8 mod 2^16
         # 10;
         dds_rstn = 1;
         # 10;
