@@ -119,7 +119,7 @@ proc ila_tx_capture {} {
     if {$ila eq ""} {
         error "No ILA core found, check the bit/ltx (top.ltx)"
     }
-    set depth [get_property DATA_DEPTH $ila]
+    set depth 1024
     puts "ILA: $ila (depth $depth)"
 
     set f [open $OUT_FILE w]
@@ -130,7 +130,7 @@ proc ila_tx_capture {} {
             error "ILA capture failed: $err"
         }
         set data [get_hw_ila_data -of_objects $ila]
-        write_hw_ila_data -csv_file $TMP_CSV $data
+        write_hw_ila_data -force -csv_file $TMP_CSV $data
         set rows [convert_ila_csv $TMP_CSV $OUT_FILE]
         incr total $rows
         if {$rows != $depth} {

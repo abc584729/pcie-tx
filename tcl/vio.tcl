@@ -64,24 +64,47 @@ proc vio_tx_setup {} {
         refresh_hw_device $dev
     }
 
-    set vio [lindex [get_hw_vios -quiet -filter "CELL_NAME =~ *$VIO_NAME*"] 0]
-    if {$vio eq ""} {
-        set vio [lindex [get_hw_vios -quiet $VIO_NAME] 0]
+    # Find the intended VIO by exact CELL_NAME first; a fuzzy match can
+    # silently pick another VIO (e.g. U_vio_SEL / U_vio_ENABLE_POWER) and
+    # later fail with "does not have a [PROBE_IN0.VALUE] property".
+    set vios [get_hw_vios -quiet]
+    set vio ""
+    foreach v $vios {
+        if {[get_property CELL_NAME $v] eq $VIO_NAME} { set vio $v; break }
     }
     if {$vio eq ""} {
-        set vio [lindex [get_hw_vios -quiet] 0]
-        puts "WARNING: $VIO_NAME not found, falling back to: $vio"
+        # Fallback: case-insensitive / hierarchical name match
+        foreach v $vios {
+            set cn [get_property CELL_NAME $v]
+            if {[string match -nocase "*$VIO_NAME*" $cn]} { set vio $v; break }
+        }
     }
     if {$vio eq ""} {
-        error "No VIO core found, check the bit/ltx (top.ltx)"
+        puts "ERROR: VIO '$VIO_NAME' not found. Available VIO cores:"
+        foreach v $vios {
+            puts "  [get_property CELL_NAME $v]  ($v)"
+        }
+        error "No VIO core named $VIO_NAME, check the bit/ltx (top.ltx)"
+    }
+    puts "VIO: $vio  CELL_NAME=[get_property CELL_NAME $vio]"
+
+    # Read the mmcm lock status from probe_in0 before touching outputs,
+    # but only if this core actually has a probe_in0 port.
+    set props [list_property $vio]
+    if {[lsearch -exact $props "PROBE_IN0.VALUE"] >= 0} {
+        refresh_hw_vio $vio
+        set locked [get_property PROBE_IN0.VALUE $vio]
+        puts "mmcm_locked (probe_in0) = $locked"
+        if {$locked ne "1"} {
+            puts "WARNING: MMCM not locked, the transmit clock may be absent"
+        }
+    } else {
+        puts "WARNING: [get_property CELL_NAME $vio] has no probe_in0 port; skipping mmcm_locked check"
     }
 
-    # Read the mmcm lock status from probe_in0 before touching outputs
-    refresh_hw_vio $vio
-    set locked [get_property PROBE_IN0.VALUE $vio]
-    puts "mmcm_locked (probe_in0) = $locked"
-    if {$locked ne "1"} {
-        puts "WARNING: MMCM not locked, the transmit clock may be absent"
+    # Sanity check: this core must expose probe_out0..6 (7 outputs)
+    if {[lsearch -exact $props "PROBE_OUT6.VALUE"] < 0} {
+        error "VIO '[get_property CELL_NAME $vio]' does not have PROBE_OUT6 (expected 7 probe_outs); wrong core selected?"
     }
 
     # Hold the whole chain in reset while programming the parameters
