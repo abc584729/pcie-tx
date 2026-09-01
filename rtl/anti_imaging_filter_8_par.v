@@ -15,9 +15,9 @@
 //   filter_in connects directly to anti_imaging_filter_10.filter_out.
 //
 // Output bus mapping (time order matches the serial version):
-//   filter_out[16*(7-p) +: 16] = phase p+1 output sample (p = 0..7),
-//   bits [15:0] carry the latest of the 8 output samples, i.e. lane
-//   k = sample slot k (phase p+1 corresponds to time slot 7-p).
+//   filter_out[16*p +: 16] = phase p+1 output sample (p = 0..7),
+//   bits [15:0] carry the earliest of the 8 output samples, i.e. lane
+//   k = sample slot k (phase p+1 corresponds to time slot p).
 //
 // Latency: 3 clocks from input sample to output group; ce_out = 1
 // marks a valid group (after pipeline fill it is 1 every clock).
@@ -181,9 +181,9 @@ module anti_imaging_filter_8_par (
         end
       end
 
-      // lane remap: phase p+1 is time slot (7-p), so pack it into
-      // filter_out[16*(7-p) +: 16] to make lane k = sample slot k
-      assign filter_out[16*(7-p) +: 16] = out_r;
+      // lane remap: phase p+1 is time slot p, so pack it into
+      // filter_out[16*p +: 16] to make lane k = sample slot k
+      assign filter_out[16*p +: 16] = out_r;
     end
   endgenerate
 
