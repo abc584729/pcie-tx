@@ -389,8 +389,14 @@ entity arm_interface_write_1 is
         dds_pinc_qpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
         dds_poff_bpsk_ps : out STD_LOGIC_VECTOR(127 downto 0);
         dds_poff_qpsk_ps : out STD_LOGIC_VECTOR(127 downto 0);
-        atten_shift_bpsk : out STD_LOGIC_VECTOR(3 downto 0);
-        atten_shift_qpsk : out STD_LOGIC_VECTOR(3 downto 0)
+        atten_shift_bpsk_ps : out STD_LOGIC_VECTOR(3 downto 0);
+        atten_shift_qpsk_ps : out STD_LOGIC_VECTOR(3 downto 0);
+        ram_w_en_bpsk_ps    : out STD_LOGIC;
+        ram_w_addr_bpsk_ps  : out STD_LOGIC_VECTOR(4 downto 0);
+        ram_w_data_bpsk_ps  : out STD_LOGIC_VECTOR(15 downto 0);
+        ram_w_en_qpsk_ps    : out STD_LOGIC;
+        ram_w_addr_qpsk_ps  : out STD_LOGIC_VECTOR(4 downto 0);
+        ram_w_data_qpsk_ps  : out STD_LOGIC_VECTOR(15 downto 0)
 	);
 end arm_interface_write_1;
 
@@ -713,6 +719,20 @@ constant ADDR_DDS_POFF_QPSK_7   : std_logic_vector(11 downto 0) := x"912";
 ----    PCIe TX digital attenuator shift    ----
 constant ADDR_ATTEN_SHIFT_BPSK  : std_logic_vector(11 downto 0) := x"704";
 constant ADDR_ATTEN_SHIFT_QPSK  : std_logic_vector(11 downto 0) := x"706";
+
+----    PCIe TX RAM 写数据（bpsk/qpsk）    ----
+constant ADDR_RAM_WDATA_BPSK  : std_logic_vector(11 downto 0) := x"708";
+constant ADDR_RAM_WDATA_QPSK  : std_logic_vector(11 downto 0) := x"70A";
+
+----    bpsk/qpsk RAM 写：地址匹配、下降沿、计数器内部信号    ----
+signal ram_wdata_bpsk_eq    : std_logic;
+signal ram_wdata_bpsk_eq_d  : std_logic;
+signal ram_w_en_bpsk_ps_i   : std_logic;
+signal ram_w_addr_bpsk_ps_i : std_logic_vector(4 downto 0);
+signal ram_wdata_qpsk_eq    : std_logic;
+signal ram_wdata_qpsk_eq_d  : std_logic;
+signal ram_w_en_qpsk_ps_i   : std_logic;
+signal ram_w_addr_qpsk_ps_i : std_logic_vector(4 downto 0);
 
 
 ----------TDMA---------------
@@ -5526,11 +5546,11 @@ end process;
 process(reset_128M,clk_128M)
 begin
 	if reset_128M = '0' then
-		atten_shift_bpsk <= (others => '0');
+		atten_shift_bpsk_ps <= (others => '0');
 	elsif clk_128M'event and clk_128M = '1' then
 		if ps_cen = '0' and ps_wen = '0' then
 			if ps_addr = ADDR_ATTEN_SHIFT_BPSK then
-				atten_shift_bpsk <= ps_dout(3 downto 0);
+				atten_shift_bpsk_ps <= ps_dout(3 downto 0);
 			end if;
 		end if;
 	end if;
@@ -5539,15 +5559,91 @@ end process;
 process(reset_128M,clk_128M)
 begin
 	if reset_128M = '0' then
-		atten_shift_qpsk <= (others => '0');
+		atten_shift_qpsk_ps <= (others => '0');
 	elsif clk_128M'event and clk_128M = '1' then
 		if ps_cen = '0' and ps_wen = '0' then
 			if ps_addr = ADDR_ATTEN_SHIFT_QPSK then
-				atten_shift_qpsk <= ps_dout(3 downto 0);
+				atten_shift_qpsk_ps <= ps_dout(3 downto 0);
 			end if;
 		end if;
 	end if;
 end process;
+
+----    bpsk RAM 写数据锁存（逻辑与原寄存器一致）    ----
+process(reset_128M,clk_128M)
+begin
+	if reset_128M = '0' then
+		ram_w_data_bpsk_ps <= (others => '0');
+	elsif clk_128M'event and clk_128M = '1' then
+		if ps_cen = '0' and ps_wen = '0' then
+			if ps_addr = ADDR_RAM_WDATA_BPSK then
+				ram_w_data_bpsk_ps <= ps_dout(15 downto 0);
+			end if;
+		end if;
+	end if;
+end process;
+
+----    bpsk RAM 写地址匹配 + 下降沿产生写使能脉冲 + 写地址计数器    ----
+ram_wdata_bpsk_eq <= '1' when ps_addr = ADDR_RAM_WDATA_BPSK else '0';
+
+process(reset_128M,clk_128M)
+begin
+	if reset_128M = '0' then
+		ram_wdata_bpsk_eq_d   <= '0';
+		ram_w_en_bpsk_ps_i   <= '0';
+		ram_w_addr_bpsk_ps_i <= (others => '0');
+	elsif clk_128M'event and clk_128M = '1' then
+		ram_wdata_bpsk_eq_d   <= ram_wdata_bpsk_eq;
+		ram_w_en_bpsk_ps_i   <= '0';
+		if ram_wdata_bpsk_eq_d = '1' and ram_wdata_bpsk_eq = '0' then
+			ram_w_en_bpsk_ps_i   <= '1';    -- 下降沿：写使能脉冲
+		end if;
+		if ram_w_en_bpsk_ps_i = '1' then
+			ram_w_addr_bpsk_ps_i <= ram_w_addr_bpsk_ps_i + 1;    -- 脉冲有效，下个时钟自增
+		end if;
+	end if;
+end process;
+
+ram_w_en_bpsk_ps   <= ram_w_en_bpsk_ps_i;
+ram_w_addr_bpsk_ps <= ram_w_addr_bpsk_ps_i;
+
+----    qpsk RAM 写数据锁存（逻辑与原寄存器一致）    ----
+process(reset_128M,clk_128M)
+begin
+	if reset_128M = '0' then
+		ram_w_data_qpsk_ps <= (others => '0');
+	elsif clk_128M'event and clk_128M = '1' then
+		if ps_cen = '0' and ps_wen = '0' then
+			if ps_addr = ADDR_RAM_WDATA_QPSK then
+				ram_w_data_qpsk_ps <= ps_dout(15 downto 0);
+			end if;
+		end if;
+	end if;
+end process;
+
+----    qpsk RAM 写地址匹配 + 下降沿产生写使能脉冲 + 写地址计数器    ----
+ram_wdata_qpsk_eq <= '1' when ps_addr = ADDR_RAM_WDATA_QPSK else '0';
+
+process(reset_128M,clk_128M)
+begin
+	if reset_128M = '0' then
+		ram_wdata_qpsk_eq_d   <= '0';
+		ram_w_en_qpsk_ps_i   <= '0';
+		ram_w_addr_qpsk_ps_i <= (others => '0');
+	elsif clk_128M'event and clk_128M = '1' then
+		ram_wdata_qpsk_eq_d   <= ram_wdata_qpsk_eq;
+		ram_w_en_qpsk_ps_i   <= '0';
+		if ram_wdata_qpsk_eq_d = '1' and ram_wdata_qpsk_eq = '0' then
+			ram_w_en_qpsk_ps_i   <= '1';    -- 下降沿：写使能脉冲
+		end if;
+		if ram_w_en_qpsk_ps_i = '1' then
+			ram_w_addr_qpsk_ps_i <= ram_w_addr_qpsk_ps_i + 1;    -- 脉冲有效，下个时钟自增
+		end if;
+	end if;
+end process;
+
+ram_w_en_qpsk_ps   <= ram_w_en_qpsk_ps_i;
+ram_w_addr_qpsk_ps <= ram_w_addr_qpsk_ps_i;
 
 
 -- bpsk poff 通道0

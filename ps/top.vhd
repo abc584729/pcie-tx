@@ -351,6 +351,12 @@ signal		dds_poff_bpsk_ps :   STD_LOGIC_VECTOR(127 downto 0);
 signal		dds_poff_qpsk_ps :   STD_LOGIC_VECTOR(127 downto 0);
 signal		atten_shift_bpsk_ps :   STD_LOGIC_VECTOR(3 downto 0);
 signal		atten_shift_qpsk_ps :   STD_LOGIC_VECTOR(3 downto 0);
+signal		ram_w_en_bpsk_ps    :   STD_LOGIC;
+signal		ram_w_addr_bpsk_ps  :   STD_LOGIC_VECTOR(4 downto 0);
+signal		ram_w_data_bpsk_ps  :   STD_LOGIC_VECTOR(15 downto 0);
+signal		ram_w_en_qpsk_ps    :   STD_LOGIC;
+signal		ram_w_addr_qpsk_ps  :   STD_LOGIC_VECTOR(4 downto 0);
+signal		ram_w_data_qpsk_ps  :   STD_LOGIC_VECTOR(15 downto 0);
 
 -- vio/ps 选择信号（0:使用 vio_tx，1:使用 PS）
 signal      tx_sel_vio_ps : STD_LOGIC_VECTOR(0 downto 0);
@@ -396,6 +402,12 @@ COMPONENT tx_top
     dds_poff_qpsk : in STD_LOGIC_VECTOR(127 DOWNTO 0);
     atten_shift_bpsk : in STD_LOGIC_VECTOR(3 DOWNTO 0);
     atten_shift_qpsk : in STD_LOGIC_VECTOR(3 DOWNTO 0);
+    ram_w_en_bpsk   : in STD_LOGIC;
+    ram_w_addr_bpsk : in STD_LOGIC_VECTOR(4 DOWNTO 0);
+    ram_w_data_bpsk : in STD_LOGIC_VECTOR(15 DOWNTO 0);
+    ram_w_en_qpsk   : in STD_LOGIC;
+    ram_w_addr_qpsk : in STD_LOGIC_VECTOR(4 DOWNTO 0);
+    ram_w_data_qpsk : in STD_LOGIC_VECTOR(15 DOWNTO 0);
     iq: OUT STD_LOGIC_VECTOR(255 DOWNTO 0)
   );
  
@@ -1290,7 +1302,13 @@ component ps_interface_1 is
         dds_poff_bpsk_ps : out STD_LOGIC_VECTOR(127 downto 0);
         dds_poff_qpsk_ps : out STD_LOGIC_VECTOR(127 downto 0);
         atten_shift_bpsk_ps : out STD_LOGIC_VECTOR(3 downto 0);
-        atten_shift_qpsk_ps : out STD_LOGIC_VECTOR(3 downto 0)
+        atten_shift_qpsk_ps : out STD_LOGIC_VECTOR(3 downto 0);
+        ram_w_en_bpsk_ps    : out STD_LOGIC;
+        ram_w_addr_bpsk_ps  : out STD_LOGIC_VECTOR(4 downto 0);
+        ram_w_data_bpsk_ps  : out STD_LOGIC_VECTOR(15 downto 0);
+        ram_w_en_qpsk_ps    : out STD_LOGIC;
+        ram_w_addr_qpsk_ps  : out STD_LOGIC_VECTOR(4 downto 0);
+        ram_w_data_qpsk_ps  : out STD_LOGIC_VECTOR(15 downto 0)
   );
 end component;
 
@@ -3858,7 +3876,13 @@ Port map (
         dds_poff_bpsk_ps => dds_poff_bpsk_ps,
         dds_poff_qpsk_ps => dds_poff_qpsk_ps,
         atten_shift_bpsk_ps => atten_shift_bpsk_ps,
-        atten_shift_qpsk_ps => atten_shift_qpsk_ps
+        atten_shift_qpsk_ps => atten_shift_qpsk_ps,
+        ram_w_en_bpsk_ps    => ram_w_en_bpsk_ps,
+        ram_w_addr_bpsk_ps  => ram_w_addr_bpsk_ps,
+        ram_w_data_bpsk_ps  => ram_w_data_bpsk_ps,
+        ram_w_en_qpsk_ps    => ram_w_en_qpsk_ps,
+        ram_w_addr_qpsk_ps  => ram_w_addr_qpsk_ps,
+        ram_w_data_qpsk_ps  => ram_w_data_qpsk_ps
 );
 
 ---------------灯开关---------------------
@@ -4734,6 +4758,12 @@ atten_shift_qpsk_mux <= atten_shift_qpsk     when tx_sel_vio_ps(0) = '0' else at
     dds_poff_qpsk => dds_poff_qpsk_mux,
     atten_shift_bpsk => atten_shift_bpsk_mux,
     atten_shift_qpsk => atten_shift_qpsk_mux,
+    ram_w_en_bpsk   => ram_w_en_bpsk_ps,
+    ram_w_addr_bpsk => ram_w_addr_bpsk_ps,
+    ram_w_data_bpsk => ram_w_data_bpsk_ps,
+    ram_w_en_qpsk   => ram_w_en_qpsk_ps,
+    ram_w_addr_qpsk => ram_w_addr_qpsk_ps,
+    ram_w_data_qpsk => ram_w_data_qpsk_ps,
     iq            => iq
   );
  

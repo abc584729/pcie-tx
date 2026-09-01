@@ -4,9 +4,6 @@
 /*
  * pcie_tx.h
  * PCIe 发射系统 PS 侧配置接口头文件
- *
- * 说明：PL 侧寄存器地址如有调整，仅需修改本头文件中的宏定义，
- *       无需修改 pcie_tx.c 中的逻辑代码。
  */
 
 /* ================= 寄存器地址定义 ================= */
@@ -16,6 +13,8 @@
 #define TX_REG_ENABLE           (0x702)    /* tx 使能：0 关闭，1 使能     */
 #define TX_REG_ATTEN_BPSK       (0x704)    /* bpsk 数字衰减（右移 0~15）   */
 #define TX_REG_ATTEN_QPSK       (0x706)    /* qpsk 数字衰减（右移 0~15）   */
+#define TX_REG_RAM_WDATA_BPSK   (0x708)    /* bpsk 符号表写数据（写地址自动递增） */
+#define TX_REG_RAM_WDATA_QPSK   (0x70A)    /* qpsk 符号表写数据（写地址自动递增） */
 
 /* DDS 中频配置寄存器 */
 #define DDS_REG_RESET           (0x800)    /* dds 复位：0 复位，1 解除复位 */

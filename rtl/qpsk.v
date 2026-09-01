@@ -25,6 +25,9 @@ module qpsk(
         input [127:0] dds_poff,
         input dds_rstn,
         input [3:0] shift,
+        input w_en,
+        input [4:0] w_addr,
+        input [15:0] w_data,
         output [127:0] sig_i, sig_q
     );
 
@@ -36,9 +39,9 @@ module qpsk(
     qpsk_ram u_qpsk_ram(
         .clk         (clk),
         .rst_n       (rst_n),
-        .w_en        (1'b0),
-        .w_addr      (5'd0),
-        .w_data      (16'd0),
+        .w_en        (w_en),
+        .w_addr      (w_addr),
+        .w_data      (w_data),
         .rd_en       (en),
         .rdata       (bits),
         .rdata_valid (bits_valid)
