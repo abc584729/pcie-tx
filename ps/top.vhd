@@ -4273,22 +4273,8 @@ PA_switch_delay_400ns <= sig_delay(count_pa_delay-1);
 --    probe_out0(0) => iq_switch
 --  );
 
-s20_axis_tdata_0(15 downto 0)    <= dout_mod_I_0;
-s20_axis_tdata_0(31 downto 16)   <= dout_mod_Q_0;
-s20_axis_tdata_0(47 downto 32)   <= dout_mod_I_1;
-s20_axis_tdata_0(63 downto 48)   <= dout_mod_Q_1;
-s20_axis_tdata_0(79 downto 64)   <= dout_mod_I_2;
-s20_axis_tdata_0(95 downto 80)   <= dout_mod_Q_2;
-s20_axis_tdata_0(111 downto 96)  <= dout_mod_I_3;
-s20_axis_tdata_0(127 downto 112) <= dout_mod_Q_3;
-s20_axis_tdata_0(143 downto 128) <= dout_mod_I_4;
-s20_axis_tdata_0(159 downto 144) <= dout_mod_Q_4;
-s20_axis_tdata_0(175 downto 160) <= dout_mod_I_5;
-s20_axis_tdata_0(191 downto 176) <= dout_mod_Q_5;
-s20_axis_tdata_0(207 downto 192) <= dout_mod_I_6;
-s20_axis_tdata_0(223 downto 208) <= dout_mod_Q_6;
-s20_axis_tdata_0(239 downto 224) <= dout_mod_I_7;
-s20_axis_tdata_0(255 downto 240) <= dout_mod_Q_7;
+-- tx_top 256位 iq（RFDC 格式 {q7,i7,...,q0,i0}）-> DAC tile230 s20_axis 接口
+s20_axis_tdata_0 <= iq;
 
 
 
