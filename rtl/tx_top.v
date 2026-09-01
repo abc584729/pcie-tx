@@ -23,6 +23,8 @@
 module tx_top(
         input clk, rst_n, tx_en,
         input dds_rstn,
+        input [3:0] atten_shift_bpsk, 
+        input [3:0] atten_shift_qpsk,
         input [15:0] dds_pinc_bpsk,
         input [15:0] dds_pinc_qpsk,
         input [127:0] dds_poff_bpsk,

@@ -339,6 +339,27 @@ signal		dds_pinc_qpsk :   STD_LOGIC_VECTOR(15 downto 0);
 signal		dds_poff_bpsk :   STD_LOGIC_VECTOR(127 downto 0);   
 signal		dds_poff_qpsk :   STD_LOGIC_VECTOR(127 downto 0); 
 
+---- PCIe TX PS 侧信号 ----
+signal		tx_rstn_ps     :   STD_LOGIC;
+signal		tx_en_ps       :   STD_LOGIC;
+signal		dds_rstn_ps    :   STD_LOGIC;
+signal		dds_pinc_bpsk_ps :   STD_LOGIC_VECTOR(15 downto 0);
+signal		dds_pinc_qpsk_ps :   STD_LOGIC_VECTOR(15 downto 0);
+signal		dds_poff_bpsk_ps :   STD_LOGIC_VECTOR(127 downto 0);
+signal		dds_poff_qpsk_ps :   STD_LOGIC_VECTOR(127 downto 0);
+
+-- vio/ps 选择信号（0:使用 vio_tx，1:使用 PS）
+signal      tx_sel_vio_ps : STD_LOGIC_VECTOR(0 downto 0);
+
+-- mux 后信号
+signal      tx_rstn_mux       : STD_LOGIC;
+signal      tx_en_mux         : STD_LOGIC;
+signal      dds_rstn_mux      : STD_LOGIC;
+signal      dds_pinc_bpsk_mux : STD_LOGIC_VECTOR(15 downto 0);
+signal      dds_pinc_qpsk_mux : STD_LOGIC_VECTOR(15 downto 0);
+signal      dds_poff_bpsk_mux : STD_LOGIC_VECTOR(127 downto 0);
+signal      dds_poff_qpsk_mux : STD_LOGIC_VECTOR(127 downto 0);
+
 COMPONENT vio_tx
   PORT (
     clk : IN STD_LOGIC;
@@ -349,7 +370,8 @@ COMPONENT vio_tx
     probe_out3 : OUT STD_LOGIC_VECTOR(15 DOWNTO 0);
     probe_out4 : OUT STD_LOGIC_VECTOR(15 DOWNTO 0);
     probe_out5 : OUT STD_LOGIC_VECTOR(127 DOWNTO 0);
-    probe_out6 : OUT STD_LOGIC_VECTOR(127 DOWNTO 0)
+    probe_out6 : OUT STD_LOGIC_VECTOR(127 DOWNTO 0);
+    probe_out7 : OUT STD_LOGIC_VECTOR(0 DOWNTO 0)
   );
 END COMPONENT;
 
@@ -801,14 +823,12 @@ port
  );
 end component;
 
-signal      clk_180m            :   std_logic;
 component clk_wiz_1
 port
  (-- Clock in ports
   -- Clock out ports
   clk_out1          : out    std_logic;
   clk_out2          : out    std_logic;
-  clk_out3          : out    std_logic;
   -- Status and control signals
   resetn             : in     std_logic;
   locked            : out    std_logic;
@@ -1253,8 +1273,16 @@ component ps_interface_1 is
         configurable_freq_hopping_phase_offset_4          : out   std_logic_vector(15 downto 0);
         configurable_freq_hopping_phase_offset_5          : out   std_logic_vector(15 downto 0);
         configurable_freq_hopping_phase_offset_6          : out   std_logic_vector(15 downto 0);
-        configurable_freq_hopping_phase_offset_7          : out   std_logic_vector(15 downto 0)
-	);
+        configurable_freq_hopping_phase_offset_7          : out   std_logic_vector(15 downto 0);
+        ----    PCIe TX (tx_top) PS 配置    ----
+        tx_rstn_ps       : out STD_LOGIC;
+        tx_en_ps         : out STD_LOGIC;
+        dds_rstn_ps      : out STD_LOGIC;
+        dds_pinc_bpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
+        dds_pinc_qpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
+        dds_poff_bpsk_ps : out STD_LOGIC_VECTOR(127 downto 0);
+        dds_poff_qpsk_ps : out STD_LOGIC_VECTOR(127 downto 0)
+  );
 end component;
 
 signal pl_mod : std_logic;
@@ -3811,7 +3839,15 @@ Port map (
         configurable_freq_hopping_phase_offset_4       => configurable_freq_hopping_phase_offset_4    ,
         configurable_freq_hopping_phase_offset_5       => configurable_freq_hopping_phase_offset_5    ,
         configurable_freq_hopping_phase_offset_6       => configurable_freq_hopping_phase_offset_6    ,
-        configurable_freq_hopping_phase_offset_7       => configurable_freq_hopping_phase_offset_7    
+        configurable_freq_hopping_phase_offset_7       => configurable_freq_hopping_phase_offset_7    ,
+        ----    PCIe TX (tx_top) PS 配置    ----
+        tx_rstn_ps       => tx_rstn_ps,
+        tx_en_ps         => tx_en_ps,
+        dds_rstn_ps      => dds_rstn_ps,
+        dds_pinc_bpsk_ps => dds_pinc_bpsk_ps,
+        dds_pinc_qpsk_ps => dds_pinc_qpsk_ps,
+        dds_poff_bpsk_ps => dds_poff_bpsk_ps,
+        dds_poff_qpsk_ps => dds_poff_qpsk_ps
 );
 
 ---------------灯开关---------------------
@@ -4635,7 +4671,6 @@ u_clk_wiz_1 : clk_wiz_1
   -- Clock out ports  
    clk_out1 => clk_128M,
    clk_out2 => clk_512M,
-   clk_out3 => clk_180m,
   -- Status and control signals                
    resetn => SI5341_locked,
    locked => mmcm_locked,
@@ -4665,7 +4700,7 @@ port map (
 
 u_vio_tx : vio_tx
   PORT MAP (
-    clk => clk_180m,
+    clk => clk_128M,
     probe_in0(0) => mmcm_locked,
     probe_out0 => tx_rstn,
     probe_out1 => tx_en ,
@@ -4673,26 +4708,36 @@ u_vio_tx : vio_tx
     probe_out3 => dds_pinc_bpsk,
     probe_out4 => dds_pinc_qpsk,
     probe_out5 => dds_poff_bpsk,
-    probe_out6 => dds_poff_qpsk
+    probe_out6 => dds_poff_qpsk,
+    probe_out7 => tx_sel_vio_ps
   );
+
+-- PCIe TX vio/ps 选择 mux 逻辑
+tx_rstn_mux       <= tx_rstn(0)        when tx_sel_vio_ps(0) = '0' else tx_rstn_ps;
+tx_en_mux         <= tx_en(0)          when tx_sel_vio_ps(0) = '0' else tx_en_ps;
+dds_rstn_mux      <= dds_rstn(0)       when tx_sel_vio_ps(0) = '0' else dds_rstn_ps;
+dds_pinc_bpsk_mux <= dds_pinc_bpsk     when tx_sel_vio_ps(0) = '0' else dds_pinc_bpsk_ps;
+dds_pinc_qpsk_mux <= dds_pinc_qpsk     when tx_sel_vio_ps(0) = '0' else dds_pinc_qpsk_ps;
+dds_poff_bpsk_mux <= dds_poff_bpsk     when tx_sel_vio_ps(0) = '0' else dds_poff_bpsk_ps;
+dds_poff_qpsk_mux <= dds_poff_qpsk     when tx_sel_vio_ps(0) = '0' else dds_poff_qpsk_ps;
  
  u_tx_top: tx_top
   PORT MAP (
-    clk           => clk_180m,
-    rst_n         => tx_rstn(0),        
-    tx_en         => tx_en(0) ,         
-    dds_rstn      => dds_rstn(0),       
-    dds_pinc_bpsk => dds_pinc_bpsk,  
-    dds_pinc_qpsk => dds_pinc_qpsk,  
-    dds_poff_bpsk => dds_poff_bpsk,  
-    dds_poff_qpsk => dds_poff_qpsk,  
+    clk           => clk_128M,
+    rst_n         => tx_rstn_mux,
+    tx_en         => tx_en_mux,
+    dds_rstn      => dds_rstn_mux,
+    dds_pinc_bpsk => dds_pinc_bpsk_mux,
+    dds_pinc_qpsk => dds_pinc_qpsk_mux,
+    dds_poff_bpsk => dds_poff_bpsk_mux,
+    dds_poff_qpsk => dds_poff_qpsk_mux,
     i             => i,
     q             => q
   );
  
  u_ila_tx : ila_tx
 PORT MAP (
-	clk => clk_180m,
+	clk => clk_128M,
 	probe0 => i,
 	probe1 => q
 ); 
