@@ -55,6 +55,42 @@ void set_dds_frequency_qpsk(double freq_point)
     dds_set_frequency(DDS_REG_PINC_QPSK, DDS_REG_POFF_QPSK_BASE, freq_point);
 }
 
+/* bpsk/qpsk 符号表初始化数据（32 x 16bit） */
+#define RAM_INIT_LEN    (32)
+static const u16 ram_init_data[RAM_INIT_LEN] = {
+    0x8688, 0xC67C, 0x26B3, 0x917E, 0x9EFB, 0x3D91, 0x6813, 0x003A, 0x81ED, 0xAB6E, 0x6145, 0x0A93, 0x67FA, 0x84F3, 0xA1CB, 0x4252, 0x2F02, 0x3E85, 0x2C5B, 0x0854, 0xAAD7, 0x3882, 0x0EB2, 0x92DA, 0x0BBA, 0x7616, 0xDD41, 0xED37, 0x3064, 0xEC34, 0xB0B3, 0xBE57
+};
+
+/*
+ * bpsk 符号表 RAM 写
+ * data : 符号表数据（每字 16bit，写地址由硬件自动递增）
+ * len  : 写入字数（应与 RAM 深度 32 一致）
+ */
+void write_bpsk_ram(const u16 *data, u16 len)
+{
+    u16 i;
+    for (i = 0; i < len; i++)
+    {
+        emc_write(TX_REG_RAM_WDATA_BPSK, data[i]);
+    }
+    printf("bpsk ram write done: %d words\r\n", len);
+}
+
+/*
+ * qpsk 符号表 RAM 写
+ * data : 符号表数据（每字 16bit，写地址由硬件自动递增）
+ * len  : 写入字数（应与 RAM 深度 32 一致）
+ */
+void write_qpsk_ram(const u16 *data, u16 len)
+{
+    u16 i;
+    for (i = 0; i < len; i++)
+    {
+        emc_write(TX_REG_RAM_WDATA_QPSK, data[i]);
+    }
+    printf("qpsk ram write done: %d words\r\n", len);
+}
+
 /* 发射初始化 */
 void tx_init(void)
 {
@@ -70,6 +106,10 @@ void tx_init(void)
     /* 默认幅度配置（右移 0~15） */
     emc_write(TX_REG_ATTEN_BPSK, 0);  /* bpsk 数字衰减 */
     emc_write(TX_REG_ATTEN_QPSK, 0);  /* qpsk 数字衰减 */
+
+    /* 符号表 RAM 初始化 */
+    write_bpsk_ram(ram_init_data, RAM_INIT_LEN);
+    write_qpsk_ram(ram_init_data, RAM_INIT_LEN);
 
     emc_write(TX_REG_RESET, 1);     /* 解除 tx 复位 */
     emc_write(TX_REG_ENABLE, 1);    /* tx 使能 */
