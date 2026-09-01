@@ -1,4 +1,5 @@
 #include "AdhocSoft.h"
+#include "pcie_tx.h"
 
 char localIPDef[20] = "192.168.1.10";
 char hostIPDef[20] = "192.168.1.1";
@@ -181,7 +182,10 @@ void main_thread(void)
 	//emc_write(RX_CONFIG_COMPLETE, 0xff);
 	//emc_write(0x0A6, 0); //配置完成
 
-
+	// add by me
+	tx_init();
+	// end
+	
 	emc_write(0x174, 15);	//配置跳时跳频使能控制
 //	emc_write(0x0E6, 4788); //配置12脉冲组帧的总长度
 	emc_write(0x0E6, 7956); //配置12脉冲组帧的总长度,原始是7956，测速改为4788
