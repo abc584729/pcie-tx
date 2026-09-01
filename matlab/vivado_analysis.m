@@ -6,28 +6,24 @@ raw = textscan(fid, '%s');
 fclose(fid);
 lines = raw{1};
 
-nG = floor(length(lines)/2);       
-iLines = lines(1:2:2*nG);             
-qLines = lines(2:2:2*nG);           
-
-nz = find(cellfun(@(a,b) any(a=='1') || any(b=='1'), iLines, qLines), 1, 'first');
-iLines = iLines(nz:end);
-qLines = qLines(nz:end);
+% each line is one 256-bit iq frame, RFDC format {q7,i7,...,q0,i0}
+nz = find(cellfun(@(a) any(a=='1'), lines), 1, 'first');
+lines = lines(nz:end);
 
 data = [];
-for k = 1:length(iLines)
-    bi = iLines{k};
-    bq = qLines{k};
+for k = 1:length(lines)
+    b = lines{k};
     for j = 1:8
-        idx1 = (8-j)*16 + 1;
-        idx2 = (8-j+1)*16;
+        base = (j-1)*32;          % lane j=1..8 -> q7..q0, 32 bit per lane
+        bq = b(base+1:base+16);
+        bi = b(base+17:base+32);
 
-        ui = bin2dec(bi(idx1:idx2));
-        if ui >= 2^15, ui = ui - 2^16; end  
-        uq = bin2dec(bq(idx1:idx2));
+        uq = bin2dec(bq);
         if uq >= 2^15, uq = uq - 2^16; end
+        ui = bin2dec(bi);
+        if ui >= 2^15, ui = ui - 2^16; end
 
-        data(end+1) = complex(ui, uq) / 2^15;  
+        data(end+1) = complex(ui, uq) / 2^15;
     end
 end
 

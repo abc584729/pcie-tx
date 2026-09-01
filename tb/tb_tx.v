@@ -28,6 +28,7 @@ module tb_tx(
     reg dds_rstn;
     reg [15:0] dds_pinc_bpsk, dds_pinc_qpsk;
     reg [127:0] dds_poff_bpsk, dds_poff_qpsk;
+    reg [3:0] atten_shift_bpsk, atten_shift_qpsk;
     wire [127:0] i;
     wire [127:0] q;
 
@@ -43,6 +44,8 @@ module tb_tx(
         rst_n = 0;
         tx_en = 0;
         dds_rstn = 0;
+        atten_shift_bpsk = 4'd0;    // 0 = no attenuation
+        atten_shift_qpsk = 4'd0;    // 0 = no attenuation
         fp = $fopen("D:/result.csv", "w");
         # 10;
         rst_n = 1;
@@ -76,6 +79,8 @@ module tb_tx(
         .dds_pinc_qpsk  (dds_pinc_qpsk),
         .dds_poff_bpsk  (dds_poff_bpsk),
         .dds_poff_qpsk  (dds_poff_qpsk),
+        .atten_shift_bpsk (atten_shift_bpsk),
+        .atten_shift_qpsk (atten_shift_qpsk),
         .i              (i),
         .q              (q)
     );

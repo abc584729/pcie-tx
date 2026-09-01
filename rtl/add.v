@@ -25,8 +25,11 @@ module add(
     input clk, rst_n,
     input  signed [127:0] i0, q0,
     input  signed [127:0] i1, q1,
-    output signed [127:0] iout, qout
+    output [255:0] iq
 );
+
+    // per-lane I/Q sums, kept internal
+    wire signed [127:0] iout, qout;
 
     genvar k;
     generate
@@ -38,5 +41,15 @@ module add(
             assign qout[16*k +: 16] = {sum_q[16], sum_q[14:0]};
         end
     endgenerate
+
+    // RFDC-style 256-bit IQ bus: {q7, i7, q6, i6, ..., q1, i1, q0, i0}, 16 bit per lane
+    assign iq = {qout[127:112], iout[127:112],
+                 qout[111:96],  iout[111:96],
+                 qout[95:80],   iout[95:80],
+                 qout[79:64],   iout[79:64],
+                 qout[63:48],   iout[63:48],
+                 qout[47:32],   iout[47:32],
+                 qout[31:16],   iout[31:16],
+                 qout[15:0],    iout[15:0]};
 
 endmodule

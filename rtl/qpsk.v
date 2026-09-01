@@ -24,6 +24,7 @@ module qpsk(
         input [15:0] dds_pinc,
         input [127:0] dds_poff,
         input dds_rstn,
+        input [3:0] shift,
         output [127:0] sig_i, sig_q
     );
 
@@ -56,17 +57,32 @@ module qpsk(
         .q         (pulse_q)
     );
 
+    // Digital attenuation: scale I/Q mapper outputs by 2^-shift
+    wire [15:0] pulse_i_atten, pulse_q_atten;
+    wire pulse_atten_valid;
+    digital_attenuator_iq u_digital_attenuator_iq(
+        .clk         (clk),
+        .rst_n       (rst_n),
+        .din_i       (pulse_i),
+        .din_q       (pulse_q),
+        .shift       (shift),
+        .din_valid   (pulse_valid),
+        .dout_i      (pulse_i_atten),
+        .dout_q      (pulse_q_atten),
+        .dout_valid  (pulse_atten_valid)
+    );
+
     // 8x zero insertion (40 clk -> 5 clk), I/Q lanes
     wire [15:0] pad_i8, pad_q8;
     wire pad_8_valid;
     zero_interpolator #(.TIME_FACTOR(40), .INTERPOLATION_FACTOR(8)) u_zero_padding_8_i(
         .clk(clk), .rst_n(rst_n),
-        .x(pulse_i), .x_valid(pulse_valid),
+        .x(pulse_i_atten), .x_valid(pulse_atten_valid),
         .y(pad_i8), .y_valid(pad_8_valid)
     );
     zero_interpolator #(.TIME_FACTOR(40), .INTERPOLATION_FACTOR(8)) u_zero_padding_8_q(
         .clk(clk), .rst_n(rst_n),
-        .x(pulse_q), .x_valid(pulse_valid),
+        .x(pulse_q_atten), .x_valid(pulse_atten_valid),
         .y(pad_q8), .y_valid()   // same slot phase as the I lane, left open
     );
 

@@ -448,7 +448,9 @@ entity ps_interface_1 is
         dds_pinc_bpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
         dds_pinc_qpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
         dds_poff_bpsk_ps : out STD_LOGIC_VECTOR(127 downto 0);
-        dds_poff_qpsk_ps : out STD_LOGIC_VECTOR(127 downto 0)
+        dds_poff_qpsk_ps : out STD_LOGIC_VECTOR(127 downto 0);
+        atten_shift_bpsk_ps : out STD_LOGIC_VECTOR(3 downto 0);
+        atten_shift_qpsk_ps : out STD_LOGIC_VECTOR(3 downto 0)
 	);
 end ps_interface_1;
 
@@ -810,7 +812,9 @@ component arm_interface_write_1
         dds_pinc_bpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
         dds_pinc_qpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
         dds_poff_bpsk_ps : out STD_LOGIC_VECTOR(127 downto 0);
-        dds_poff_qpsk_ps : out STD_LOGIC_VECTOR(127 downto 0)
+        dds_poff_qpsk_ps : out STD_LOGIC_VECTOR(127 downto 0);
+        atten_shift_bpsk_ps : out STD_LOGIC_VECTOR(3 downto 0);
+        atten_shift_qpsk_ps : out STD_LOGIC_VECTOR(3 downto 0)
 	);
 end component;
 
@@ -1252,7 +1256,9 @@ U1 : arm_interface_write_1 Port map (
         dds_pinc_bpsk_ps => dds_pinc_bpsk_ps,
         dds_pinc_qpsk_ps => dds_pinc_qpsk_ps,
         dds_poff_bpsk_ps => dds_poff_bpsk_ps,
-        dds_poff_qpsk_ps => dds_poff_qpsk_ps
+        dds_poff_qpsk_ps => dds_poff_qpsk_ps,
+        atten_shift_bpsk_ps => atten_shift_bpsk_ps,
+        atten_shift_qpsk_ps => atten_shift_qpsk_ps
 );
 
 U2 : arm_interface_read_1 Port map ( 

@@ -1,11 +1,10 @@
 # =====================================================================
 # ila.tcl - TX data acquisition script (Vivado 2020.2 Hardware Manager)
 #
-# Captures u_ila_tx (probe0 = i[127:0], probe1 = q[127:0], clocked at
-# clk_180m, depth 1024) N times, converts the exported hex CSV into
-# result.csv for matlab/vivado_analysis.m.
-# result.csv format: one 128-bit binary string per line, I/Q lines
-# interleaved, no header.
+# Captures u_ila_tx (probe0 = iq[255:0], RFDC format {q7,i7,...,q0,i0},
+# clocked at clk_180m, depth 1024) N times, converts the exported hex
+# CSV into result.csv for matlab/vivado_analysis.m.
+# result.csv format: one 256-bit binary string per line, no header.
 #
 # Usage:
 #   1. Hardware Manager -> Open Target -> Auto Connect
@@ -46,9 +45,9 @@ proc hex2bin {hex width} {
 # ---------------------------------------------------------------------
 # Parse the CSV exported by write_hw_ila_data:
 #   line 1 = header, line 2 = radix description, data rows start with
-#   the sample index and carry probe values in hex; the last two
-#   columns are probe0 (i) and probe1 (q).
-# Append "I line\nQ line" binary text to outFile, return the frame count.
+#   the sample index and carry probe values in hex; the last column is
+#   probe0 = iq[255:0] (RFDC format {q7,i7,...,q0,i0}).
+# Append one 256-bit binary line per frame to outFile, return the frame count.
 proc convert_ila_csv {csvPath outFile} {
     set fh [open $csvPath r]
     set of [open $outFile a]
@@ -59,16 +58,14 @@ proc convert_ila_csv {csvPath outFile} {
         if {$line eq ""} { continue }
         set fld [split $line ","]
         if {![regexp {^[0-9]+$} [lindex $fld 0]]} { continue }
-        if {[llength $fld] < 3} { continue }
-        set ihex [lindex $fld end-1]
-        set qhex [lindex $fld end]
-        if {![regexp {^[0-9a-fA-F]+$} $ihex] || ![regexp {^[0-9a-fA-F]+$} $qhex]} {
+        if {[llength $fld] < 2} { continue }
+        set iqhex [lindex $fld end]
+        if {![regexp {^[0-9a-fA-F]+$} $iqhex]} {
             close $fh
             close $of
             error "failed to parse data row: $line"
         }
-        puts $of [hex2bin $ihex 128]
-        puts $of [hex2bin $qhex 128]
+        puts $of [hex2bin $iqhex 256]
         incr rows
     }
     close $fh

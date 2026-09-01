@@ -338,6 +338,8 @@ signal		dds_pinc_bpsk :   STD_LOGIC_VECTOR(15 downto 0);
 signal		dds_pinc_qpsk :   STD_LOGIC_VECTOR(15 downto 0);   
 signal		dds_poff_bpsk :   STD_LOGIC_VECTOR(127 downto 0);   
 signal		dds_poff_qpsk :   STD_LOGIC_VECTOR(127 downto 0); 
+signal		atten_shift_bpsk :   STD_LOGIC_VECTOR(3 downto 0);
+signal		atten_shift_qpsk :   STD_LOGIC_VECTOR(3 downto 0);
 
 ---- PCIe TX PS 侧信号 ----
 signal		tx_rstn_ps     :   STD_LOGIC;
@@ -347,6 +349,8 @@ signal		dds_pinc_bpsk_ps :   STD_LOGIC_VECTOR(15 downto 0);
 signal		dds_pinc_qpsk_ps :   STD_LOGIC_VECTOR(15 downto 0);
 signal		dds_poff_bpsk_ps :   STD_LOGIC_VECTOR(127 downto 0);
 signal		dds_poff_qpsk_ps :   STD_LOGIC_VECTOR(127 downto 0);
+signal		atten_shift_bpsk_ps :   STD_LOGIC_VECTOR(3 downto 0);
+signal		atten_shift_qpsk_ps :   STD_LOGIC_VECTOR(3 downto 0);
 
 -- vio/ps 选择信号（0:使用 vio_tx，1:使用 PS）
 signal      tx_sel_vio_ps : STD_LOGIC_VECTOR(0 downto 0);
@@ -359,6 +363,8 @@ signal      dds_pinc_bpsk_mux : STD_LOGIC_VECTOR(15 downto 0);
 signal      dds_pinc_qpsk_mux : STD_LOGIC_VECTOR(15 downto 0);
 signal      dds_poff_bpsk_mux : STD_LOGIC_VECTOR(127 downto 0);
 signal      dds_poff_qpsk_mux : STD_LOGIC_VECTOR(127 downto 0);
+signal      atten_shift_bpsk_mux : STD_LOGIC_VECTOR(3 downto 0);
+signal      atten_shift_qpsk_mux : STD_LOGIC_VECTOR(3 downto 0);
 
 COMPONENT vio_tx
   PORT (
@@ -371,12 +377,13 @@ COMPONENT vio_tx
     probe_out4 : OUT STD_LOGIC_VECTOR(15 DOWNTO 0);
     probe_out5 : OUT STD_LOGIC_VECTOR(127 DOWNTO 0);
     probe_out6 : OUT STD_LOGIC_VECTOR(127 DOWNTO 0);
-    probe_out7 : OUT STD_LOGIC_VECTOR(0 DOWNTO 0)
+    probe_out7 : OUT STD_LOGIC_VECTOR(0 DOWNTO 0);
+    probe_out8 : OUT STD_LOGIC_VECTOR(3 DOWNTO 0);
+    probe_out9 : OUT STD_LOGIC_VECTOR(3 DOWNTO 0)
   );
 END COMPONENT;
 
-signal		i :   STD_LOGIC_VECTOR(127 downto 0);   
-signal		q :   STD_LOGIC_VECTOR(127 downto 0); 
+signal		iq :   STD_LOGIC_VECTOR(255 downto 0);   
 COMPONENT tx_top
   PORT (
     clk : IN STD_LOGIC;
@@ -387,8 +394,9 @@ COMPONENT tx_top
     dds_pinc_qpsk : in STD_LOGIC_VECTOR(15 DOWNTO 0);
     dds_poff_bpsk : in STD_LOGIC_VECTOR(127 DOWNTO 0);
     dds_poff_qpsk : in STD_LOGIC_VECTOR(127 DOWNTO 0);
-    i: OUT STD_LOGIC_VECTOR(127 DOWNTO 0);
-    q: OUT STD_LOGIC_VECTOR(127 DOWNTO 0)
+    atten_shift_bpsk : in STD_LOGIC_VECTOR(3 DOWNTO 0);
+    atten_shift_qpsk : in STD_LOGIC_VECTOR(3 DOWNTO 0);
+    iq: OUT STD_LOGIC_VECTOR(255 DOWNTO 0)
   );
  
 END COMPONENT;
@@ -400,8 +408,7 @@ PORT (
 
 
 
-	probe0 : IN STD_LOGIC_VECTOR(127 DOWNTO 0);
-	probe1 : IN STD_LOGIC_VECTOR(127 DOWNTO 0)
+	probe0 : IN STD_LOGIC_VECTOR(255 DOWNTO 0)
 );
 END COMPONENT  ;
 
@@ -1281,7 +1288,9 @@ component ps_interface_1 is
         dds_pinc_bpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
         dds_pinc_qpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
         dds_poff_bpsk_ps : out STD_LOGIC_VECTOR(127 downto 0);
-        dds_poff_qpsk_ps : out STD_LOGIC_VECTOR(127 downto 0)
+        dds_poff_qpsk_ps : out STD_LOGIC_VECTOR(127 downto 0);
+        atten_shift_bpsk_ps : out STD_LOGIC_VECTOR(3 downto 0);
+        atten_shift_qpsk_ps : out STD_LOGIC_VECTOR(3 downto 0)
   );
 end component;
 
@@ -3847,7 +3856,9 @@ Port map (
         dds_pinc_bpsk_ps => dds_pinc_bpsk_ps,
         dds_pinc_qpsk_ps => dds_pinc_qpsk_ps,
         dds_poff_bpsk_ps => dds_poff_bpsk_ps,
-        dds_poff_qpsk_ps => dds_poff_qpsk_ps
+        dds_poff_qpsk_ps => dds_poff_qpsk_ps,
+        atten_shift_bpsk_ps => atten_shift_bpsk_ps,
+        atten_shift_qpsk_ps => atten_shift_qpsk_ps
 );
 
 ---------------灯开关---------------------
@@ -4709,7 +4720,9 @@ u_vio_tx : vio_tx
     probe_out4 => dds_pinc_qpsk,
     probe_out5 => dds_poff_bpsk,
     probe_out6 => dds_poff_qpsk,
-    probe_out7 => tx_sel_vio_ps
+    probe_out7 => tx_sel_vio_ps,
+    probe_out8 => atten_shift_bpsk,
+    probe_out9 => atten_shift_qpsk
   );
 
 -- PCIe TX vio/ps 选择 mux 逻辑
@@ -4720,6 +4733,8 @@ dds_pinc_bpsk_mux <= dds_pinc_bpsk     when tx_sel_vio_ps(0) = '0' else dds_pinc
 dds_pinc_qpsk_mux <= dds_pinc_qpsk     when tx_sel_vio_ps(0) = '0' else dds_pinc_qpsk_ps;
 dds_poff_bpsk_mux <= dds_poff_bpsk     when tx_sel_vio_ps(0) = '0' else dds_poff_bpsk_ps;
 dds_poff_qpsk_mux <= dds_poff_qpsk     when tx_sel_vio_ps(0) = '0' else dds_poff_qpsk_ps;
+atten_shift_bpsk_mux <= atten_shift_bpsk     when tx_sel_vio_ps(0) = '0' else atten_shift_bpsk_ps;
+atten_shift_qpsk_mux <= atten_shift_qpsk     when tx_sel_vio_ps(0) = '0' else atten_shift_qpsk_ps;
  
  u_tx_top: tx_top
   PORT MAP (
@@ -4731,15 +4746,15 @@ dds_poff_qpsk_mux <= dds_poff_qpsk     when tx_sel_vio_ps(0) = '0' else dds_poff
     dds_pinc_qpsk => dds_pinc_qpsk_mux,
     dds_poff_bpsk => dds_poff_bpsk_mux,
     dds_poff_qpsk => dds_poff_qpsk_mux,
-    i             => i,
-    q             => q
+    atten_shift_bpsk => atten_shift_bpsk_mux,
+    atten_shift_qpsk => atten_shift_qpsk_mux,
+    iq            => iq
   );
  
  u_ila_tx : ila_tx
 PORT MAP (
 	clk => clk_128M,
-	probe0 => i,
-	probe1 => q
+	probe0 => iq
 ); 
 
 --U7: pcie_test_ram

@@ -25,6 +25,7 @@ module bpsk(
         input [15:0] dds_pinc,
         input [127:0] dds_poff,
         input dds_rstn,
+        input [3:0] shift,
         output [127:0] sig_i, sig_q
     );
 
@@ -54,13 +55,26 @@ module bpsk(
         .sig_valid     (pulse_valid)
     );
 
+    // Digital attenuation: scale mapper output by 2^-shift
+    wire [15:0] pulse_atten;
+    wire  pulse_atten_valid;
+    digital_attenuator u_digital_attenuator(
+        .clk         (clk),
+        .rst_n       (rst_n),
+        .din         (pulse),
+        .shift       (shift),
+        .din_valid   (pulse_valid),
+        .dout        (pulse_atten),
+        .dout_valid  (pulse_atten_valid)
+    );
+
     wire [15:0] pad_8;
     wire  pad_8_valid;
     zero_interpolator #(.TIME_FACTOR(400), .INTERPOLATION_FACTOR(8)) u_zero_padding_8(
         .clk           (clk),
         .rst_n         (rst_n),
-        .x             (pulse),
-        .x_valid       (pulse_valid),
+        .x             (pulse_atten),
+        .x_valid       (pulse_atten_valid),
         .y             (pad_8),
         .y_valid       (pad_8_valid)
     );

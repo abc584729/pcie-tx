@@ -388,7 +388,9 @@ entity arm_interface_write_1 is
         dds_pinc_bpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
         dds_pinc_qpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
         dds_poff_bpsk_ps : out STD_LOGIC_VECTOR(127 downto 0);
-        dds_poff_qpsk_ps : out STD_LOGIC_VECTOR(127 downto 0)
+        dds_poff_qpsk_ps : out STD_LOGIC_VECTOR(127 downto 0);
+        atten_shift_bpsk : out STD_LOGIC_VECTOR(3 downto 0);
+        atten_shift_qpsk : out STD_LOGIC_VECTOR(3 downto 0)
 	);
 end arm_interface_write_1;
 
@@ -707,6 +709,10 @@ constant ADDR_DDS_POFF_QPSK_4   : std_logic_vector(11 downto 0) := x"90C";
 constant ADDR_DDS_POFF_QPSK_5   : std_logic_vector(11 downto 0) := x"90E";
 constant ADDR_DDS_POFF_QPSK_6   : std_logic_vector(11 downto 0) := x"910";
 constant ADDR_DDS_POFF_QPSK_7   : std_logic_vector(11 downto 0) := x"912";
+
+----    PCIe TX digital attenuator shift    ----
+constant ADDR_ATTEN_SHIFT_BPSK  : std_logic_vector(11 downto 0) := x"704";
+constant ADDR_ATTEN_SHIFT_QPSK  : std_logic_vector(11 downto 0) := x"706";
 
 
 ----------TDMA---------------
@@ -5516,6 +5522,33 @@ begin
 		end if;
 	end if;
 end process;
+
+process(reset_128M,clk_128M)
+begin
+	if reset_128M = '0' then
+		atten_shift_bpsk <= (others => '0');
+	elsif clk_128M'event and clk_128M = '1' then
+		if ps_cen = '0' and ps_wen = '0' then
+			if ps_addr = ADDR_ATTEN_SHIFT_BPSK then
+				atten_shift_bpsk <= ps_dout(3 downto 0);
+			end if;
+		end if;
+	end if;
+end process;
+
+process(reset_128M,clk_128M)
+begin
+	if reset_128M = '0' then
+		atten_shift_qpsk <= (others => '0');
+	elsif clk_128M'event and clk_128M = '1' then
+		if ps_cen = '0' and ps_wen = '0' then
+			if ps_addr = ADDR_ATTEN_SHIFT_QPSK then
+				atten_shift_qpsk <= ps_dout(3 downto 0);
+			end if;
+		end if;
+	end if;
+end process;
+
 
 -- bpsk poff Í¨µÀ0
 process(reset_128M,clk_128M)

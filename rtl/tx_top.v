@@ -29,7 +29,7 @@ module tx_top(
         input [15:0] dds_pinc_qpsk,
         input [127:0] dds_poff_bpsk,
         input [127:0] dds_poff_qpsk,
-        output [127:0] i, q
+        output [255:0] iq
     );
 
     wire [127:0] i_0, q_0;
@@ -40,6 +40,7 @@ module tx_top(
         .dds_pinc      (dds_pinc_bpsk),
         .dds_poff      (dds_poff_bpsk),
         .dds_rstn      (dds_rstn),
+        .shift         (atten_shift_bpsk),
         .sig_i         (i_0),
         .sig_q         (q_0)
     );
@@ -48,10 +49,11 @@ module tx_top(
     qpsk u_qpsk(
         .clk           (clk),
         .rst_n         (rst_n),
-        .en            (tx_en),        
+        .en            (tx_en),
         .dds_pinc      (dds_pinc_qpsk),
         .dds_poff      (dds_poff_qpsk),
         .dds_rstn      (dds_rstn),
+        .shift         (atten_shift_qpsk),
         .sig_i         (i_1),
         .sig_q         (q_1)
     );
@@ -63,7 +65,6 @@ module tx_top(
         .q0            (q_0),
         .i1            (i_1),
         .q1            (q_1),
-        .iout          (i),
-        .qout          (q)
+        .iq            (iq)
     );
 endmodule
