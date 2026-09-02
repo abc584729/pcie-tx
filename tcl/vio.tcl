@@ -3,12 +3,21 @@
 #
 # Configures hw_vio u_vio_tx to enable the transmit chain (tx_top):
 #   probe_out0 = tx_rstn              (1 bit)
-#   probe_out1 = tx_en                (1 bit)
+#   probe_out1 = ram_en               (1 bit)   (was tx_en; now the bpsk/qpsk RAM read enable)
 #   probe_out2 = dds_rstn             (1 bit)
 #   probe_out3 = dds_pinc_bpsk        (16 bit)
 #   probe_out4 = dds_pinc_qpsk        (16 bit)
 #   probe_out5 = dds_poff_bpsk        (128 bit)
 #   probe_out6 = dds_poff_qpsk        (128 bit)
+#   probe_out7 = tx_sel_vio_ps        (1 bit)
+#   probe_out8 = atten_bpsk           (16 bit signed, Q1.14, 0x4000 = 0 dB)
+#   probe_out9 = atten_qpsk           (16 bit signed, Q1.14, 0x4000 = 0 dB)
+#   probe_out10 = bpsk_en             (1 bit)
+#   probe_out11 = qpsk_en             (1 bit)
+#
+# NOTE: the VIO IP (vio_tx) must be regenerated with 12 probe_outs
+#       (probe_out0..11) for this script to work, and probe_out8/9
+#       widened to 16 bit for the Q1.14 attenuation coefficients.
 #
 # Defaults match tb/tb_tx.v:
 #   BPSK: fc = 100 MHz, pinc = round(65536*100/180) = 36409 = 0x8E39
@@ -22,7 +31,7 @@
 #   Console: source vio.tcl
 #
 # Note: hold the chain in reset while programming pinc/poff, then
-#       release resets and finally assert tx_en.
+#       release resets, assert bpsk/qpsk enable, and finally assert ram_en.
 # =====================================================================
 
 set VIO_NAME  u_vio_tx
@@ -102,36 +111,40 @@ proc vio_tx_setup {} {
         puts "WARNING: [get_property CELL_NAME $vio] has no probe_in0 port; skipping mmcm_locked check"
     }
 
-    # Sanity check: this core must expose probe_out0..6 (7 outputs)
-    if {[lsearch -exact $props "PROBE_OUT6.VALUE"] < 0} {
-        error "VIO '[get_property CELL_NAME $vio]' does not have PROBE_OUT6 (expected 7 probe_outs); wrong core selected?"
+    # Sanity check: this core must expose probe_out0..11 (12 outputs)
+    if {[lsearch -exact $props "PROBE_OUT11.VALUE"] < 0} {
+        error "VIO '[get_property CELL_NAME $vio]' does not have PROBE_OUT11 (expected 12 probe_outs); regenerate vio_tx with probe_out10/11 for bpsk_en/qpsk_en"
     }
 
     # Hold the whole chain in reset while programming the parameters
     set_property PROBE_OUT0.VALUE 0 $vio          ;# tx_rstn
-    set_property PROBE_OUT1.VALUE 0 $vio          ;# tx_en
+    set_property PROBE_OUT1.VALUE 0 $vio          ;# ram_en
     set_property PROBE_OUT2.VALUE 0 $vio          ;# dds_rstn
     set_property PROBE_OUT3.VALUE $PINC_BPSK $vio
     set_property PROBE_OUT4.VALUE $PINC_QPSK $vio
     set_property PROBE_OUT5.VALUE $POFF_BPSK $vio
     set_property PROBE_OUT6.VALUE $POFF_QPSK $vio
+    set_property PROBE_OUT10.VALUE 1 $vio         ;# bpsk_en
+    set_property PROBE_OUT11.VALUE 1 $vio         ;# qpsk_en
     after 100
 
     # Release the DDS and tx resets, then start transmission
     set_property PROBE_OUT2.VALUE 1 $vio          ;# dds_rstn
     set_property PROBE_OUT0.VALUE 1 $vio          ;# tx_rstn
     after 100
-    set_property PROBE_OUT1.VALUE 1 $vio          ;# tx_en
+    set_property PROBE_OUT1.VALUE 1 $vio          ;# ram_en
 
     puts "---------------------------------------------"
     puts "u_vio_tx configured:"
     puts "  tx_rstn    = [get_property PROBE_OUT0.VALUE $vio]"
-    puts "  tx_en      = [get_property PROBE_OUT1.VALUE $vio]"
+    puts "  ram_en     = [get_property PROBE_OUT1.VALUE $vio]"
     puts "  dds_rstn   = [get_property PROBE_OUT2.VALUE $vio]"
     puts "  pinc_bpsk  = [get_property PROBE_OUT3.VALUE $vio]"
     puts "  pinc_qpsk  = [get_property PROBE_OUT4.VALUE $vio]"
     puts "  poff_bpsk  = [get_property PROBE_OUT5.VALUE $vio]"
     puts "  poff_qpsk  = [get_property PROBE_OUT6.VALUE $vio]"
+    puts "  bpsk_en    = [get_property PROBE_OUT10.VALUE $vio]"
+    puts "  qpsk_en    = [get_property PROBE_OUT11.VALUE $vio]"
     puts "Transmit chain enabled, ready to run ila.tcl"
 }
 

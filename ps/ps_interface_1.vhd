@@ -443,14 +443,16 @@ entity ps_interface_1 is
         
         ----    PCIe TX (tx_top) PS ÅäÖÃ    ----
         tx_rstn_ps       : out STD_LOGIC;
-        tx_en_ps         : out STD_LOGIC;
+        ram_en_ps        : out STD_LOGIC;
+        bpsk_en_ps       : out STD_LOGIC;
+        qpsk_en_ps       : out STD_LOGIC;
         dds_rstn_ps      : out STD_LOGIC;
         dds_pinc_bpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
         dds_pinc_qpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
         dds_poff_bpsk_ps : out STD_LOGIC_VECTOR(127 downto 0);
         dds_poff_qpsk_ps : out STD_LOGIC_VECTOR(127 downto 0);
-        atten_shift_bpsk_ps : out STD_LOGIC_VECTOR(3 downto 0);
-        atten_shift_qpsk_ps : out STD_LOGIC_VECTOR(3 downto 0);
+        atten_bpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
+        atten_qpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
         ram_w_en_bpsk_ps    : out STD_LOGIC;
         ram_w_addr_bpsk_ps  : out STD_LOGIC_VECTOR(4 downto 0);
         ram_w_data_bpsk_ps  : out STD_LOGIC_VECTOR(15 downto 0);
@@ -813,14 +815,16 @@ component arm_interface_write_1
         configurable_freq_hopping_phase_offset_7          : out   std_logic_vector(15 downto 0);
         ----    PCIe TX (tx_top) PS ÅäÖÃ    ----
         tx_rstn_ps       : out STD_LOGIC;
-        tx_en_ps         : out STD_LOGIC;
+        ram_en_ps        : out STD_LOGIC;
+        bpsk_en_ps       : out STD_LOGIC;
+        qpsk_en_ps       : out STD_LOGIC;
         dds_rstn_ps      : out STD_LOGIC;
         dds_pinc_bpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
         dds_pinc_qpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
         dds_poff_bpsk_ps : out STD_LOGIC_VECTOR(127 downto 0);
         dds_poff_qpsk_ps : out STD_LOGIC_VECTOR(127 downto 0);
-        atten_shift_bpsk_ps : out STD_LOGIC_VECTOR(3 downto 0);
-        atten_shift_qpsk_ps : out STD_LOGIC_VECTOR(3 downto 0);
+        atten_bpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
+        atten_qpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
         ram_w_en_bpsk_ps    : out STD_LOGIC;
         ram_w_addr_bpsk_ps  : out STD_LOGIC_VECTOR(4 downto 0);
         ram_w_data_bpsk_ps  : out STD_LOGIC_VECTOR(15 downto 0);
@@ -1263,14 +1267,16 @@ U1 : arm_interface_write_1 Port map (
         configurable_freq_hopping_phase_offset_7   =>   configurable_freq_hopping_phase_offset_7 ,
         ----    PCIe TX (tx_top) PS ÅäÖÃ    ----
         tx_rstn_ps       => tx_rstn_ps,
-        tx_en_ps         => tx_en_ps,
+        ram_en_ps        => ram_en_ps,
+        bpsk_en_ps       => bpsk_en_ps,
+        qpsk_en_ps       => qpsk_en_ps,
         dds_rstn_ps      => dds_rstn_ps,
         dds_pinc_bpsk_ps => dds_pinc_bpsk_ps,
         dds_pinc_qpsk_ps => dds_pinc_qpsk_ps,
         dds_poff_bpsk_ps => dds_poff_bpsk_ps,
         dds_poff_qpsk_ps => dds_poff_qpsk_ps,
-        atten_shift_bpsk_ps => atten_shift_bpsk_ps,
-        atten_shift_qpsk_ps => atten_shift_qpsk_ps,
+        atten_bpsk_ps => atten_bpsk_ps,
+        atten_qpsk_ps => atten_qpsk_ps,
         ram_w_en_bpsk_ps    => ram_w_en_bpsk_ps,
         ram_w_addr_bpsk_ps  => ram_w_addr_bpsk_ps,
         ram_w_data_bpsk_ps  => ram_w_data_bpsk_ps,

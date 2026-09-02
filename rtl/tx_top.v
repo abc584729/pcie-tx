@@ -21,10 +21,11 @@
 
 
 module tx_top(
-        input clk, rst_n, tx_en,
+        input clk, rst_n, ram_en,
+        input bpsk_en, qpsk_en,
         input dds_rstn,
-        input [3:0] atten_shift_bpsk, 
-        input [3:0] atten_shift_qpsk,
+        input signed [15:0] atten_bpsk, // Q1.14: 0x4000 = 1.0 (0 dB), 0x2000 = 0.5 (-6 dB)
+        input signed [15:0] atten_qpsk,
         input [15:0] dds_pinc_bpsk,
         input [15:0] dds_pinc_qpsk,
         input [127:0] dds_poff_bpsk,
@@ -42,11 +43,12 @@ module tx_top(
     bpsk u_bpsk(
         .clk           (clk),
         .rst_n         (rst_n),
-        .en            (tx_en),
+        .ram_en        (ram_en),
+        .bpsk_en       (bpsk_en),
         .dds_pinc      (dds_pinc_bpsk),
         .dds_poff      (dds_poff_bpsk),
         .dds_rstn      (dds_rstn),
-        .shift         (atten_shift_bpsk),
+        .atten         (atten_bpsk),
         .w_en          (ram_w_en_bpsk),
         .w_addr        (ram_w_addr_bpsk),
         .w_data        (ram_w_data_bpsk),
@@ -58,11 +60,12 @@ module tx_top(
     qpsk u_qpsk(
         .clk           (clk),
         .rst_n         (rst_n),
-        .en            (tx_en),
+        .ram_en        (ram_en),
+        .qpsk_en       (qpsk_en),
         .dds_pinc      (dds_pinc_qpsk),
         .dds_poff      (dds_poff_qpsk),
         .dds_rstn      (dds_rstn),
-        .shift         (atten_shift_qpsk),
+        .atten         (atten_qpsk),
         .w_en          (ram_w_en_qpsk),
         .w_addr        (ram_w_addr_qpsk),
         .w_data        (ram_w_data_qpsk),

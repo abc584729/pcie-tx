@@ -6,6 +6,8 @@
  */
 
 #include "pcie_tx.h"
+#include "AdhocSoft.h"
+#include <math.h>
 
 /*
  * DDS 频点配置公共函数
@@ -55,6 +57,43 @@ void set_dds_frequency_qpsk(double freq_point)
     dds_set_frequency(DDS_REG_PINC_QPSK, DDS_REG_POFF_QPSK_BASE, freq_point);
 }
 
+/*
+ * 数字衰减配置（dB -> Q1.14 系数）
+ * atten_db : 衰减量（dB），正值表示衰减，0 表示 0dB（无衰减）
+ * 系数 = round(16384 * 10^(-atten_db/20))
+ * 例：0dB -> 0x4000（1.0），6dB -> 0x2013，12dB -> 0x1013，20dB -> 0x0666
+ *     精确 -6dB 增益是 0.501187 而非 0.5，所以系数不是规整的 0x2000
+ * 注意：本函数仅用于衰减（增益 <= 1.0）；负 dB（放大）会被钳位到 0x4000，
+ *       因为 RTL 端系数 > 1.0 时 16 位输出会溢出回绕。
+ */
+static u16 atten_db_to_q114(double atten_db)
+{
+    double gain = pow(10.0, -atten_db / 20.0);   /* 幅度线性增益 */
+    long   tmp  = (long)(gain * 16384.0 + 0.5);  /* Q1.14 系数（四舍五入），先按有符号钳位 */
+    u16    coeff;
+
+    if (tmp > 0x4000) tmp = 0x4000;  /* 钳位：0dB，不做放大 */
+    if (tmp < 0)      tmp = 0;       /* 钳位：完全静音 */
+    coeff = (u16)tmp;
+    return coeff;
+}
+
+/* bpsk 数字衰减（dB）：转换为 Q1.14 系数后写入 0x704 */
+void set_attenuation_bpsk(double atten_db)
+{
+    u16 coeff = atten_db_to_q114(atten_db);
+    printf("bpsk attenuation : %lf dB -> coeff 0x%04x \r\n", atten_db, coeff);
+    emc_write(TX_REG_ATTEN_BPSK, coeff);
+}
+
+/* qpsk 数字衰减（dB）：转换为 Q1.14 系数后写入 0x706 */
+void set_attenuation_qpsk(double atten_db)
+{
+    u16 coeff = atten_db_to_q114(atten_db);
+    printf("qpsk attenuation : %lf dB -> coeff 0x%04x \r\n", atten_db, coeff);
+    emc_write(TX_REG_ATTEN_QPSK, coeff);
+}
+
 /* bpsk/qpsk 符号表初始化数据（32 x 16bit） */
 #define RAM_INIT_LEN    (32)
 static const u16 ram_init_data[RAM_INIT_LEN] = {
@@ -97,22 +136,24 @@ void tx_init(void)
     printf("Tx initializing ... \r\n");
 
     emc_write(TX_REG_RESET, 0);     /* tx 复位 */
-    emc_write(TX_REG_ENABLE, 0);    /* tx 使能关闭 */
+    emc_write(TX_REG_RAM_EN, 0);    /* ram 读使能关闭 */
 
     /* 默认频点配置 */
     set_dds_frequency_bpsk(100);    /* bpsk 中频 */
     set_dds_frequency_qpsk(200);    /* qpsk 中频 */
 
-    /* 默认幅度配置（右移 0~15） */
-    emc_write(TX_REG_ATTEN_BPSK, 0);  /* bpsk 数字衰减 */
-    emc_write(TX_REG_ATTEN_QPSK, 0);  /* qpsk 数字衰减 */
+    /* 默认衰减配置：0dB */
+    set_attenuation_bpsk(0.0);    /* bpsk 数字衰减 */
+    set_attenuation_qpsk(0.0);    /* qpsk 数字衰减 */
 
     /* 符号表 RAM 初始化 */
     write_bpsk_ram(ram_init_data, RAM_INIT_LEN);
     write_qpsk_ram(ram_init_data, RAM_INIT_LEN);
 
     emc_write(TX_REG_RESET, 1);     /* 解除 tx 复位 */
-    emc_write(TX_REG_ENABLE, 1);    /* tx 使能 */
+    emc_write(TX_REG_BPSK_ENABLE, 1);  /* bpsk 使能 */
+    emc_write(TX_REG_QPSK_ENABLE, 1);  /* qpsk 使能 */
+    emc_write(TX_REG_RAM_EN, 1);    /* ram 读使能 */
 
     printf("Tx has been initialized. \r\n");
 }

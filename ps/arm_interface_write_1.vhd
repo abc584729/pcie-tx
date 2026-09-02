@@ -383,14 +383,16 @@ entity arm_interface_write_1 is
         
         ----    PCIe TX (tx_top) PS 配置    ----
         tx_rstn_ps       : out STD_LOGIC;
-        tx_en_ps         : out STD_LOGIC;
+        ram_en_ps        : out STD_LOGIC;
+        bpsk_en_ps       : out STD_LOGIC;
+        qpsk_en_ps       : out STD_LOGIC;
         dds_rstn_ps      : out STD_LOGIC;
         dds_pinc_bpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
         dds_pinc_qpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
         dds_poff_bpsk_ps : out STD_LOGIC_VECTOR(127 downto 0);
         dds_poff_qpsk_ps : out STD_LOGIC_VECTOR(127 downto 0);
-        atten_shift_bpsk_ps : out STD_LOGIC_VECTOR(3 downto 0);
-        atten_shift_qpsk_ps : out STD_LOGIC_VECTOR(3 downto 0);
+        atten_bpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
+        atten_qpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
         ram_w_en_bpsk_ps    : out STD_LOGIC;
         ram_w_addr_bpsk_ps  : out STD_LOGIC_VECTOR(4 downto 0);
         ram_w_data_bpsk_ps  : out STD_LOGIC_VECTOR(15 downto 0);
@@ -695,7 +697,7 @@ constant ADDR_configurable_freq_hopping_phase_init_7 : std_logic_vector(11 downt
 
 ----    PCIe TX (tx_top) PS 配置    ----
 constant ADDR_TX_RSTN           : std_logic_vector(11 downto 0) := x"700";
-constant ADDR_TX_EN             : std_logic_vector(11 downto 0) := x"702";
+constant ADDR_RAM_EN            : std_logic_vector(11 downto 0) := x"702";
 constant ADDR_DDS_RSTN          : std_logic_vector(11 downto 0) := x"800";
 constant ADDR_DDS_PINC_BPSK     : std_logic_vector(11 downto 0) := x"802";
 constant ADDR_DDS_POFF_BPSK_0   : std_logic_vector(11 downto 0) := x"804";
@@ -716,13 +718,15 @@ constant ADDR_DDS_POFF_QPSK_5   : std_logic_vector(11 downto 0) := x"90E";
 constant ADDR_DDS_POFF_QPSK_6   : std_logic_vector(11 downto 0) := x"910";
 constant ADDR_DDS_POFF_QPSK_7   : std_logic_vector(11 downto 0) := x"912";
 
-----    PCIe TX digital attenuator shift    ----
-constant ADDR_ATTEN_SHIFT_BPSK  : std_logic_vector(11 downto 0) := x"704";
-constant ADDR_ATTEN_SHIFT_QPSK  : std_logic_vector(11 downto 0) := x"706";
+----    PCIe TX 数字衰减器（Q1.14 系数，0x4000 = 0dB）    ----
+constant ADDR_ATTEN_BPSK  : std_logic_vector(11 downto 0) := x"704";
+constant ADDR_ATTEN_QPSK  : std_logic_vector(11 downto 0) := x"706";
 
 ----    PCIe TX RAM 写数据（bpsk/qpsk）    ----
 constant ADDR_RAM_WDATA_BPSK  : std_logic_vector(11 downto 0) := x"708";
 constant ADDR_RAM_WDATA_QPSK  : std_logic_vector(11 downto 0) := x"70A";
+constant ADDR_BPSK_EN         : std_logic_vector(11 downto 0) := x"70C";
+constant ADDR_QPSK_EN         : std_logic_vector(11 downto 0) := x"70E";
 
 ----    bpsk/qpsk RAM 写：地址匹配、下降沿、计数器内部信号    ----
 signal ram_wdata_bpsk_eq    : std_logic;
@@ -5494,11 +5498,37 @@ end process;
 process(reset_128M,clk_128M)
 begin
 	if reset_128M = '0' then
-		tx_en_ps <= '0';
+		ram_en_ps <= '0';
 	elsif clk_128M'event and clk_128M = '1' then
 		if ps_cen = '0' and ps_wen = '0' then
-			if ps_addr = ADDR_TX_EN then
-				tx_en_ps <= ps_dout(0);
+			if ps_addr = ADDR_RAM_EN then
+				ram_en_ps <= ps_dout(0);
+			end if;
+		end if;
+	end if;
+end process;
+
+process(reset_128M,clk_128M)
+begin
+	if reset_128M = '0' then
+		bpsk_en_ps <= '0';
+	elsif clk_128M'event and clk_128M = '1' then
+		if ps_cen = '0' and ps_wen = '0' then
+			if ps_addr = ADDR_BPSK_EN then
+				bpsk_en_ps <= ps_dout(0);
+			end if;
+		end if;
+	end if;
+end process;
+
+process(reset_128M,clk_128M)
+begin
+	if reset_128M = '0' then
+		qpsk_en_ps <= '0';
+	elsif clk_128M'event and clk_128M = '1' then
+		if ps_cen = '0' and ps_wen = '0' then
+			if ps_addr = ADDR_QPSK_EN then
+				qpsk_en_ps <= ps_dout(0);
 			end if;
 		end if;
 	end if;
@@ -5546,11 +5576,11 @@ end process;
 process(reset_128M,clk_128M)
 begin
 	if reset_128M = '0' then
-		atten_shift_bpsk_ps <= (others => '0');
+		atten_bpsk_ps <= (others => '0');
 	elsif clk_128M'event and clk_128M = '1' then
 		if ps_cen = '0' and ps_wen = '0' then
-			if ps_addr = ADDR_ATTEN_SHIFT_BPSK then
-				atten_shift_bpsk_ps <= ps_dout(3 downto 0);
+			if ps_addr = ADDR_ATTEN_BPSK then
+				atten_bpsk_ps <= ps_dout(15 downto 0);
 			end if;
 		end if;
 	end if;
@@ -5559,11 +5589,11 @@ end process;
 process(reset_128M,clk_128M)
 begin
 	if reset_128M = '0' then
-		atten_shift_qpsk_ps <= (others => '0');
+		atten_qpsk_ps <= (others => '0');
 	elsif clk_128M'event and clk_128M = '1' then
 		if ps_cen = '0' and ps_wen = '0' then
-			if ps_addr = ADDR_ATTEN_SHIFT_QPSK then
-				atten_shift_qpsk_ps <= ps_dout(3 downto 0);
+			if ps_addr = ADDR_ATTEN_QPSK then
+				atten_qpsk_ps <= ps_dout(15 downto 0);
 			end if;
 		end if;
 	end if;

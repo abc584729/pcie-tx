@@ -332,25 +332,29 @@ PORT (
 END COMPONENT  ;
 
 signal		tx_rstn       :   STD_LOGIC_VECTOR(0 downto 0);   
-signal		tx_en         :   STD_LOGIC_VECTOR(0 downto 0);   
+signal		ram_en        :   STD_LOGIC_VECTOR(0 downto 0);   
+signal		bpsk_en       :   STD_LOGIC_VECTOR(0 downto 0);   
+signal		qpsk_en       :   STD_LOGIC_VECTOR(0 downto 0);   
 signal		dds_rstn      :   STD_LOGIC_VECTOR(0 downto 0);   
 signal		dds_pinc_bpsk :   STD_LOGIC_VECTOR(15 downto 0);   
 signal		dds_pinc_qpsk :   STD_LOGIC_VECTOR(15 downto 0);   
 signal		dds_poff_bpsk :   STD_LOGIC_VECTOR(127 downto 0);   
 signal		dds_poff_qpsk :   STD_LOGIC_VECTOR(127 downto 0); 
-signal		atten_shift_bpsk :   STD_LOGIC_VECTOR(3 downto 0);
-signal		atten_shift_qpsk :   STD_LOGIC_VECTOR(3 downto 0);
+signal		atten_bpsk :   STD_LOGIC_VECTOR(15 downto 0);
+signal		atten_qpsk :   STD_LOGIC_VECTOR(15 downto 0);
 
 ---- PCIe TX PS ²àÐÅºÅ ----
 signal		tx_rstn_ps     :   STD_LOGIC;
-signal		tx_en_ps       :   STD_LOGIC;
+signal		ram_en_ps      :   STD_LOGIC;
+signal		bpsk_en_ps     :   STD_LOGIC;
+signal		qpsk_en_ps     :   STD_LOGIC;
 signal		dds_rstn_ps    :   STD_LOGIC;
 signal		dds_pinc_bpsk_ps :   STD_LOGIC_VECTOR(15 downto 0);
 signal		dds_pinc_qpsk_ps :   STD_LOGIC_VECTOR(15 downto 0);
 signal		dds_poff_bpsk_ps :   STD_LOGIC_VECTOR(127 downto 0);
 signal		dds_poff_qpsk_ps :   STD_LOGIC_VECTOR(127 downto 0);
-signal		atten_shift_bpsk_ps :   STD_LOGIC_VECTOR(3 downto 0);
-signal		atten_shift_qpsk_ps :   STD_LOGIC_VECTOR(3 downto 0);
+signal		atten_bpsk_ps :   STD_LOGIC_VECTOR(15 downto 0);
+signal		atten_qpsk_ps :   STD_LOGIC_VECTOR(15 downto 0);
 signal		ram_w_en_bpsk_ps    :   STD_LOGIC;
 signal		ram_w_addr_bpsk_ps  :   STD_LOGIC_VECTOR(4 downto 0);
 signal		ram_w_data_bpsk_ps  :   STD_LOGIC_VECTOR(15 downto 0);
@@ -363,14 +367,16 @@ signal      tx_sel_vio_ps : STD_LOGIC_VECTOR(0 downto 0);
 
 -- mux ºóÐÅºÅ
 signal      tx_rstn_mux       : STD_LOGIC;
-signal      tx_en_mux         : STD_LOGIC;
+signal      ram_en_mux        : STD_LOGIC;
+signal      bpsk_en_mux       : STD_LOGIC;
+signal      qpsk_en_mux       : STD_LOGIC;
 signal      dds_rstn_mux      : STD_LOGIC;
 signal      dds_pinc_bpsk_mux : STD_LOGIC_VECTOR(15 downto 0);
 signal      dds_pinc_qpsk_mux : STD_LOGIC_VECTOR(15 downto 0);
 signal      dds_poff_bpsk_mux : STD_LOGIC_VECTOR(127 downto 0);
 signal      dds_poff_qpsk_mux : STD_LOGIC_VECTOR(127 downto 0);
-signal      atten_shift_bpsk_mux : STD_LOGIC_VECTOR(3 downto 0);
-signal      atten_shift_qpsk_mux : STD_LOGIC_VECTOR(3 downto 0);
+signal      atten_bpsk_mux : STD_LOGIC_VECTOR(15 downto 0);
+signal      atten_qpsk_mux : STD_LOGIC_VECTOR(15 downto 0);
 
 COMPONENT vio_tx
   PORT (
@@ -384,8 +390,10 @@ COMPONENT vio_tx
     probe_out5 : OUT STD_LOGIC_VECTOR(127 DOWNTO 0);
     probe_out6 : OUT STD_LOGIC_VECTOR(127 DOWNTO 0);
     probe_out7 : OUT STD_LOGIC_VECTOR(0 DOWNTO 0);
-    probe_out8 : OUT STD_LOGIC_VECTOR(3 DOWNTO 0);
-    probe_out9 : OUT STD_LOGIC_VECTOR(3 DOWNTO 0)
+    probe_out8 : OUT STD_LOGIC_VECTOR(15 DOWNTO 0);
+    probe_out9 : OUT STD_LOGIC_VECTOR(15 DOWNTO 0);
+    probe_out10 : OUT STD_LOGIC_VECTOR(0 DOWNTO 0);
+    probe_out11 : OUT STD_LOGIC_VECTOR(0 DOWNTO 0)
   );
 END COMPONENT;
 
@@ -394,14 +402,16 @@ COMPONENT tx_top
   PORT (
     clk : IN STD_LOGIC;
     rst_n : IN STD_LOGIC;
-    tx_en : IN STD_LOGIC;
+    ram_en : IN STD_LOGIC;
+    bpsk_en : IN STD_LOGIC;
+    qpsk_en : IN STD_LOGIC;
     dds_rstn : IN STD_LOGIC;
     dds_pinc_bpsk : in  STD_LOGIC_VECTOR(15 DOWNTO 0);
     dds_pinc_qpsk : in STD_LOGIC_VECTOR(15 DOWNTO 0);
     dds_poff_bpsk : in STD_LOGIC_VECTOR(127 DOWNTO 0);
     dds_poff_qpsk : in STD_LOGIC_VECTOR(127 DOWNTO 0);
-    atten_shift_bpsk : in STD_LOGIC_VECTOR(3 DOWNTO 0);
-    atten_shift_qpsk : in STD_LOGIC_VECTOR(3 DOWNTO 0);
+    atten_bpsk : in STD_LOGIC_VECTOR(15 DOWNTO 0);
+    atten_qpsk : in STD_LOGIC_VECTOR(15 DOWNTO 0);
     ram_w_en_bpsk   : in STD_LOGIC;
     ram_w_addr_bpsk : in STD_LOGIC_VECTOR(4 DOWNTO 0);
     ram_w_data_bpsk : in STD_LOGIC_VECTOR(15 DOWNTO 0);
@@ -1295,14 +1305,16 @@ component ps_interface_1 is
         configurable_freq_hopping_phase_offset_7          : out   std_logic_vector(15 downto 0);
         ----    PCIe TX (tx_top) PS ÅäÖÃ    ----
         tx_rstn_ps       : out STD_LOGIC;
-        tx_en_ps         : out STD_LOGIC;
+        ram_en_ps        : out STD_LOGIC;
+        bpsk_en_ps       : out STD_LOGIC;
+        qpsk_en_ps       : out STD_LOGIC;
         dds_rstn_ps      : out STD_LOGIC;
         dds_pinc_bpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
         dds_pinc_qpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
         dds_poff_bpsk_ps : out STD_LOGIC_VECTOR(127 downto 0);
         dds_poff_qpsk_ps : out STD_LOGIC_VECTOR(127 downto 0);
-        atten_shift_bpsk_ps : out STD_LOGIC_VECTOR(3 downto 0);
-        atten_shift_qpsk_ps : out STD_LOGIC_VECTOR(3 downto 0);
+        atten_bpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
+        atten_qpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
         ram_w_en_bpsk_ps    : out STD_LOGIC;
         ram_w_addr_bpsk_ps  : out STD_LOGIC_VECTOR(4 downto 0);
         ram_w_data_bpsk_ps  : out STD_LOGIC_VECTOR(15 downto 0);
@@ -3869,14 +3881,16 @@ Port map (
         configurable_freq_hopping_phase_offset_7       => configurable_freq_hopping_phase_offset_7    ,
         ----    PCIe TX (tx_top) PS ÅäÖÃ    ----
         tx_rstn_ps       => tx_rstn_ps,
-        tx_en_ps         => tx_en_ps,
+        ram_en_ps        => ram_en_ps,
+        bpsk_en_ps       => bpsk_en_ps,
+        qpsk_en_ps       => qpsk_en_ps,
         dds_rstn_ps      => dds_rstn_ps,
         dds_pinc_bpsk_ps => dds_pinc_bpsk_ps,
         dds_pinc_qpsk_ps => dds_pinc_qpsk_ps,
         dds_poff_bpsk_ps => dds_poff_bpsk_ps,
         dds_poff_qpsk_ps => dds_poff_qpsk_ps,
-        atten_shift_bpsk_ps => atten_shift_bpsk_ps,
-        atten_shift_qpsk_ps => atten_shift_qpsk_ps,
+        atten_bpsk_ps => atten_bpsk_ps,
+        atten_qpsk_ps => atten_qpsk_ps,
         ram_w_en_bpsk_ps    => ram_w_en_bpsk_ps,
         ram_w_addr_bpsk_ps  => ram_w_addr_bpsk_ps,
         ram_w_data_bpsk_ps  => ram_w_data_bpsk_ps,
@@ -4724,40 +4738,46 @@ u_vio_tx : vio_tx
     clk => clk_128M,
     probe_in0(0) => mmcm_locked,
     probe_out0 => tx_rstn,
-    probe_out1 => tx_en ,
+    probe_out1 => ram_en,
     probe_out2 => dds_rstn,
     probe_out3 => dds_pinc_bpsk,
     probe_out4 => dds_pinc_qpsk,
     probe_out5 => dds_poff_bpsk,
     probe_out6 => dds_poff_qpsk,
     probe_out7 => tx_sel_vio_ps,
-    probe_out8 => atten_shift_bpsk,
-    probe_out9 => atten_shift_qpsk
+    probe_out8 => atten_bpsk,
+    probe_out9 => atten_qpsk,
+    probe_out10 => bpsk_en,
+    probe_out11 => qpsk_en
   );
 
 -- PCIe TX vio/ps Ñ¡Ôñ mux Âß¼­
 tx_rstn_mux       <= tx_rstn(0)        when tx_sel_vio_ps(0) = '0' else tx_rstn_ps;
-tx_en_mux         <= tx_en(0)          when tx_sel_vio_ps(0) = '0' else tx_en_ps;
+ram_en_mux        <= ram_en(0)         when tx_sel_vio_ps(0) = '0' else ram_en_ps;
+bpsk_en_mux       <= bpsk_en(0)        when tx_sel_vio_ps(0) = '0' else bpsk_en_ps;
+qpsk_en_mux       <= qpsk_en(0)        when tx_sel_vio_ps(0) = '0' else qpsk_en_ps;
 dds_rstn_mux      <= dds_rstn(0)       when tx_sel_vio_ps(0) = '0' else dds_rstn_ps;
 dds_pinc_bpsk_mux <= dds_pinc_bpsk     when tx_sel_vio_ps(0) = '0' else dds_pinc_bpsk_ps;
 dds_pinc_qpsk_mux <= dds_pinc_qpsk     when tx_sel_vio_ps(0) = '0' else dds_pinc_qpsk_ps;
 dds_poff_bpsk_mux <= dds_poff_bpsk     when tx_sel_vio_ps(0) = '0' else dds_poff_bpsk_ps;
 dds_poff_qpsk_mux <= dds_poff_qpsk     when tx_sel_vio_ps(0) = '0' else dds_poff_qpsk_ps;
-atten_shift_bpsk_mux <= atten_shift_bpsk     when tx_sel_vio_ps(0) = '0' else atten_shift_bpsk_ps;
-atten_shift_qpsk_mux <= atten_shift_qpsk     when tx_sel_vio_ps(0) = '0' else atten_shift_qpsk_ps;
+atten_bpsk_mux <= atten_bpsk     when tx_sel_vio_ps(0) = '0' else atten_bpsk_ps;
+atten_qpsk_mux <= atten_qpsk     when tx_sel_vio_ps(0) = '0' else atten_qpsk_ps;
  
  u_tx_top: tx_top
   PORT MAP (
     clk           => clk_128M,
     rst_n         => tx_rstn_mux,
-    tx_en         => tx_en_mux,
+    ram_en        => ram_en_mux,
+    bpsk_en       => bpsk_en_mux,
+    qpsk_en       => qpsk_en_mux,
     dds_rstn      => dds_rstn_mux,
     dds_pinc_bpsk => dds_pinc_bpsk_mux,
     dds_pinc_qpsk => dds_pinc_qpsk_mux,
     dds_poff_bpsk => dds_poff_bpsk_mux,
     dds_poff_qpsk => dds_poff_qpsk_mux,
-    atten_shift_bpsk => atten_shift_bpsk_mux,
-    atten_shift_qpsk => atten_shift_qpsk_mux,
+    atten_bpsk => atten_bpsk_mux,
+    atten_qpsk => atten_qpsk_mux,
     ram_w_en_bpsk   => ram_w_en_bpsk_ps,
     ram_w_addr_bpsk => ram_w_addr_bpsk_ps,
     ram_w_data_bpsk => ram_w_data_bpsk_ps,

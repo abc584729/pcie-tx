@@ -26,13 +26,17 @@ module digital_attenuator_iq (
 
     input  wire signed [15:0] din_i,
     input  wire signed [15:0] din_q,
-    input  wire        [3:0]  shift,
+    input  wire signed [15:0] atten,   // Q1.14: 0x4000 = 1.0 (0 dB), 0x2000 = 0.5 (-6 dB)
     input  wire               din_valid,
 
     output reg  signed [15:0] dout_i,
     output reg  signed [15:0] dout_q,
     output reg                dout_valid
 );
+
+    // 16x16 signed multiply -> full 32-bit products
+    wire signed [31:0] prod_i = din_i * atten;
+    wire signed [31:0] prod_q = din_q * atten;
 
     always @(posedge clk) begin
         if (!rst_n) begin
@@ -41,8 +45,9 @@ module digital_attenuator_iq (
             dout_valid <= 1'b0;
         end
         else begin
-            dout_i     <= din_i >>> shift;
-            dout_q     <= din_q >>> shift;
+            // Q1.14: drop the 14 fractional bits (arithmetic shift), keep 16-bit results
+            dout_i     <= prod_i >>> 14;
+            dout_q     <= prod_q >>> 14;
             dout_valid <= din_valid;
         end
     end

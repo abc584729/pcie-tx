@@ -21,11 +21,12 @@
 
 
 module bpsk(
-        input clk, rst_n, en,
+        input clk, rst_n, ram_en,
+        input bpsk_en,
         input [15:0] dds_pinc,
         input [127:0] dds_poff,
         input dds_rstn,
-        input [3:0] shift,
+        input signed [15:0] atten,   // Q1.14: 0x4000 = 1.0 (0 dB), 0x2000 = 0.5 (-6 dB)
         input w_en,
         input [4:0] w_addr,
         input [15:0] w_data,
@@ -41,7 +42,7 @@ module bpsk(
         .w_en          (w_en),
         .w_addr        (w_addr),
         .w_data        (w_data),
-        .rd_en         (en),
+        .rd_en         (ram_en),
         .rdata         (bit),
         .rdata_valid   (bit_valid)
     );
@@ -58,14 +59,14 @@ module bpsk(
         .sig_valid     (pulse_valid)
     );
 
-    // Digital attenuation: scale mapper output by 2^-shift
+    // Digital attenuation: scale mapper output by Q1.14 coefficient (0x4000 = 0 dB)
     wire [15:0] pulse_atten;
     wire  pulse_atten_valid;
     digital_attenuator u_digital_attenuator(
         .clk         (clk),
         .rst_n       (rst_n),
         .din         (pulse),
-        .shift       (shift),
+        .atten       (atten),
         .din_valid   (pulse_valid),
         .dout        (pulse_atten),
         .dout_valid  (pulse_atten_valid)
@@ -257,21 +258,27 @@ module bpsk(
         .m_axis_dout_tdata(cmpy_dout_7)
     );
 
-    assign sig_i[15:0]    = cmpy_dout_0[15:0];
-    assign sig_q[15:0]    = cmpy_dout_0[31:16];
-    assign sig_i[31:16]   = cmpy_dout_1[15:0];
-    assign sig_q[31:16]   = cmpy_dout_1[31:16];
-    assign sig_i[47:32]   = cmpy_dout_2[15:0];
-    assign sig_q[47:32]   = cmpy_dout_2[31:16];
-    assign sig_i[63:48]   = cmpy_dout_3[15:0];
-    assign sig_q[63:48]   = cmpy_dout_3[31:16];
-    assign sig_i[79:64]   = cmpy_dout_4[15:0];
-    assign sig_q[79:64]   = cmpy_dout_4[31:16];
-    assign sig_i[95:80]   = cmpy_dout_5[15:0];
-    assign sig_q[95:80]   = cmpy_dout_5[31:16];
-    assign sig_i[111:96]  = cmpy_dout_6[15:0];
-    assign sig_q[111:96]  = cmpy_dout_6[31:16];
-    assign sig_i[127:112] = cmpy_dout_7[15:0];
-    assign sig_q[127:112] = cmpy_dout_7[31:16];
+    wire [127:0] sig_i_int, sig_q_int;
+
+    assign sig_i_int[15:0]    = cmpy_dout_0[15:0];
+    assign sig_q_int[15:0]    = cmpy_dout_0[31:16];
+    assign sig_i_int[31:16]   = cmpy_dout_1[15:0];
+    assign sig_q_int[31:16]   = cmpy_dout_1[31:16];
+    assign sig_i_int[47:32]   = cmpy_dout_2[15:0];
+    assign sig_q_int[47:32]   = cmpy_dout_2[31:16];
+    assign sig_i_int[63:48]   = cmpy_dout_3[15:0];
+    assign sig_q_int[63:48]   = cmpy_dout_3[31:16];
+    assign sig_i_int[79:64]   = cmpy_dout_4[15:0];
+    assign sig_q_int[79:64]   = cmpy_dout_4[31:16];
+    assign sig_i_int[95:80]   = cmpy_dout_5[15:0];
+    assign sig_q_int[95:80]   = cmpy_dout_5[31:16];
+    assign sig_i_int[111:96]  = cmpy_dout_6[15:0];
+    assign sig_q_int[111:96]  = cmpy_dout_6[31:16];
+    assign sig_i_int[127:112] = cmpy_dout_7[15:0];
+    assign sig_q_int[127:112] = cmpy_dout_7[31:16];
+
+    // Gate outputs by bpsk_en: zero when disabled
+    assign sig_i = bpsk_en ? sig_i_int : 128'd0;
+    assign sig_q = bpsk_en ? sig_q_int : 128'd0;
 
 endmodule
