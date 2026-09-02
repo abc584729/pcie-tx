@@ -9,6 +9,10 @@
 #include "AdhocSoft.h"
 #include <math.h>
 
+/* config state owned by adhocSoft.c //20260902 case133 */
+extern double fre_bpsk, fre_qpsk, atten_bpsk, atten_qpsk;
+extern u8     ctrl_bpsk, ctrl_qpsk;
+
 /*
  * DDS 频点配置公共函数
  * pinc_addr : 频率增量寄存器地址
@@ -138,21 +142,21 @@ void tx_init(void)
     emc_write(TX_REG_RESET, 0);     /* tx 复位 */
     emc_write(TX_REG_RAM_EN, 0);    /* ram 读使能关闭 */
 
-    /* 默认频点配置 */
-    set_dds_frequency_bpsk(100);    /* bpsk 中频 */
-    set_dds_frequency_qpsk(200);    /* qpsk 中频 */
+    /* 频点取 //20260902 case133 配置的全局量 */
+    set_dds_frequency_bpsk(fre_bpsk);    /* bpsk 中频 */
+    set_dds_frequency_qpsk(fre_qpsk);    /* qpsk 中频 */
 
-    /* 默认衰减配置：0dB */
-    set_attenuation_bpsk(0.0);    /* bpsk 数字衰减 */
-    set_attenuation_qpsk(0.0);    /* qpsk 数字衰减 */
+    /* 衰减取 //20260902 case133 配置的全局量，默认 0dB */
+    set_attenuation_bpsk(atten_bpsk);    /* bpsk 数字衰减 */
+    set_attenuation_qpsk(atten_qpsk);    /* qpsk 数字衰减 */
 
     /* 符号表 RAM 初始化 */
     write_bpsk_ram(ram_init_data, RAM_INIT_LEN);
     write_qpsk_ram(ram_init_data, RAM_INIT_LEN);
 
     emc_write(TX_REG_RESET, 1);     /* 解除 tx 复位 */
-    emc_write(TX_REG_BPSK_ENABLE, 1);  /* bpsk 使能 */
-    emc_write(TX_REG_QPSK_ENABLE, 1);  /* qpsk 使能 */
+    emc_write(TX_REG_BPSK_ENABLE, ctrl_bpsk);  /* bpsk 使能 */
+    emc_write(TX_REG_QPSK_ENABLE, ctrl_qpsk);  /* qpsk 使能 */
     emc_write(TX_REG_RAM_EN, 1);    /* ram 读使能 */
 
     printf("Tx has been initialized. \r\n");

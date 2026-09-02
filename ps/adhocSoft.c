@@ -58,6 +58,17 @@ U32 recvPktStaticPktNum = 0;
 u16 pktPS = 0;
 U8 GPSEnable = 0;
 U8 allNodesQuitFlag = 0;
+
+//20260902 edit
+/* defaults keep legacy tx_init: 100/200MHz, 0dB, channels on */
+double fre_bpsk = 100;
+double fre_qpsk = 200;
+double atten_bpsk = 0;
+double atten_qpsk = 0;
+u8 ctrl_bpsk = 1;
+u8 ctrl_qpsk = 1;
+//20260902
+
 #if 1
 /* main function */
 static inline void OsalDsb(void)
@@ -183,7 +194,7 @@ void main_thread(void)
 	//emc_write(0x0A6, 0); //配置完成
 
 	// add by me
-	tx_init();
+//	tx_init();
 	// end
 	
 	emc_write(0x174, 15);	//配置跳时跳频使能控制
@@ -1385,6 +1396,22 @@ void ProcCmd(unsigned char *pBuf, U16 len)
 			}
 			txPeriodicPktNum = 0;
 			break;
+//20260902 edit
+		case 133:
+			printf("initialization setting\r\n");
+			ctrl_bpsk = pBuf[1];
+			memcpy(&fre_bpsk, &pBuf[2], 8);
+			memcpy(&atten_bpsk, &pBuf[10], 8);
+			ctrl_qpsk = pBuf[18];
+			memcpy(&fre_qpsk, &pBuf[19], 8);
+			memcpy(&atten_qpsk, &pBuf[27], 8);
+
+			tx_init();
+
+			printf("bpsk set as: enable = %d, dds_f = %f, attenuation = %f.\r\n", ctrl_bpsk, fre_bpsk, atten_bpsk);
+			printf("qpsk set as: enable = %d, dds_f = %f, attenuation = %f.\r\n", ctrl_qpsk, fre_qpsk, atten_qpsk);
+			break;
+//20260902
 		default:
 			printf("debug: type %d wrong", type);
 			break;
