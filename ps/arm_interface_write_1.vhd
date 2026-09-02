@@ -46,43 +46,43 @@ entity arm_interface_write_1 is
 		LNA_switch_hand_1 : out  STD_LOGIC;	
         LNA_switch_hand_2 : out  STD_LOGIC;
         PA_switch_hand : out  STD_LOGIC;
-		----    K7 FPGA??????    ----
+		----    K7 FPGA加载标志    ----
 		PROGRAM_CONFIG_FPGA2  :  out std_logic;
-		----    K7 ??????????????????    ----
+		----    K7 时间同步计数器清零标志    ----
 		reset_time            :  out std_logic;
---		----    AD9520???    ----
+--		----    AD9520相关    ----
 --		flag_AD9520_config             : out   std_logic;
 --		reg_AD9520_config_wrdata       : out   std_logic_vector(23 downto 0);
 --        reset_PLL       : out   std_logic;
 
---		----    AD9680???    ----
+--		----    AD9680相关    ----
 --		flag_AD9680_config             : out   std_logic;
 --		reg_AD9680_config_wrdata       : out   std_logic_vector(15 downto 0);
 
---        ----    AD9680_2???    ----
+--        ----    AD9680_2相关    ----
 --        flag_AD9680_2_config             : out   std_logic;
 --        reg_AD9680_2_config_wrdata       : out   std_logic_vector(15 downto 0);
 		
 --		jesd_reset						: out std_logic;
 --		jesd_reset_n					: out std_logic;
 --		ps_ReSync						: out std_logic;
---		----    AD9739???    ----
+--		----    AD9739相关    ----
 --		flag_AD9739_config             : out   std_logic;
 --		reg_AD9739_config_wrdata       : out   std_logic_vector(15 downto 0);
 		
---		----    AD5XXX???    ----   --AD5XXX ????У?AD9520 ??
+--		----    AD5XXX相关    ----   --AD5XXX 用于校准AD9520 ？
 --		flag_AD5XXX_config : out  STD_LOGIC;
 --		reg_AD5XXX_wrdata : out  STD_LOGIC_VECTOR (15 downto 0);
 --		reg_AD5XXX_mode     : out std_logic_vector(3 downto 0);
 --        reg_LDAC        : out  STD_LOGIC;
 		
-		contrl_8506 : out STD_LOGIC_VECTOR (15 downto 0);       ---- ????????
+		contrl_8506 : out STD_LOGIC_VECTOR (15 downto 0);       ---- 光纤配置
 
 		reg_initial_reset : out  STD_LOGIC_VECTOR (2 downto 0);
 		reg_tx_mode : out  STD_LOGIC_VECTOR (7 downto 0);
 		reg_tx_mode_para : out  STD_LOGIC_VECTOR (7 downto 0); 			  
 
-		----	?????		----	 
+		----	初始化		----	 
 		ram_PN_sync_we : out  STD_LOGIC;
 		ram_PN_sync_din : out  STD_LOGIC_VECTOR (15 downto 0);
 		ram_PN_PAn_we : out  STD_LOGIC;
@@ -92,10 +92,10 @@ entity arm_interface_write_1 is
 		ram_PN_interleave_we : out  STD_LOGIC;
 		ram_PN_interleave_din : out  STD_LOGIC_VECTOR (15 downto 0);
 		
-		-----  ????????  ------
+		-----  功率检测模式  ------
 		agc_control_mode   : out  STD_LOGIC_vector(15 downto 0);
 		-----  agc_control  ------
-		agc_arm_ctrl_mode : out  STD_LOGIC_VECTOR (15 downto 0);				--- 0??????1arm??
+		agc_arm_ctrl_mode : out  STD_LOGIC_VECTOR (15 downto 0);				--- 0正常，1arm控
 		agc_arm_ctrl_DVGA4 : out  STD_LOGIC_vector(5 downto 0);
 		agc_arm_ctrl_12 : out  STD_LOGIC;
 		flag_agc_arm_ctrl_DVGA4 : out  STD_LOGIC;
@@ -103,18 +103,18 @@ entity arm_interface_write_1 is
         THRESHOLD_INSIDE: out  STD_LOGIC_VECTOR (15 downto 0);  
         THRESHOLD_CENTER: out  STD_LOGIC_VECTOR (15 downto 0);  
         RESPONSE_TIME		: out  STD_LOGIC_VECTOR (15 downto 0);
-        ----------------------------???????----------------
+        ----------------------------数字衰减----------------
         shift_config_value : out std_logic_vector(3 downto 0);
 		shift_din_value    : out std_logic_vector(3 downto 0);
 		----   PLL   ----
---		agc_arm_ctrl_mode : out  STD_LOGIC_VECTOR (15 downto 0);		--- 0??????1arm??
+--		agc_arm_ctrl_mode : out  STD_LOGIC_VECTOR (15 downto 0);		--- 0正常，1arm控
 		agc_arm_ctrl_DVGA1_i : out  STD_LOGIC_vector(5 downto 0);
 		agc_arm_ctrl_DVGA2_i : out  STD_LOGIC_vector(5 downto 0);
 --		agc_arm_ctrl_i : out  STD_LOGIC;
 		agc_arm_ctrl_DVGA1_q : out  STD_LOGIC_vector(5 downto 0);
 --		agc_arm_ctrl_DVGA2_q : out  STD_LOGIC_vector(5 downto 0);
 		agc_arm_ctrl_q : out  STD_LOGIC;	
-		----	????????	----
+		----	发射数据	----
 		ram_tx_interface_buffer_we : out  STD_LOGIC;
 		ram_tx_interface_buffer_din : out  STD_LOGIC_VECTOR (15 downto 0);
 		ram_tx_interface_buffer_din_type : out  STD_LOGIC_VECTOR (1 downto 0);
@@ -127,14 +127,14 @@ entity arm_interface_write_1 is
 		
 		packet_time_interval : out std_logic_vector(31 downto 0);
 		pulse_framer_length : out std_logic_vector(15 downto 0);
-		----	????????	----
+		----	接收数据	----
 		flag_rd_arm_onepacket : out  STD_LOGIC;
 		flag_rd_arm_oneint : out  STD_LOGIC;  
 		flag_rd_srio_onepacket : out std_logic;     ----K7 SRIO
         flag_rd_srio_oneint : out std_logic;
 		falg_irq_k_end : out std_logic;  
 		falg_irq_k_end_k : out std_logic;
-		----   ??????????   ---
+		----   配置接收参数   ---
 		sync_bit_pre_rx : out  sync_bits_array_type(0 to 14);
 		sync_bit_post_rx : out  sync_bits_array_type(0 to 14);
 		pattern_freq_rx_x1 : out  std_logic_vector (47 downto 0);
@@ -156,7 +156,7 @@ entity arm_interface_write_1 is
 		flag_start_rx : out  STD_LOGIC;
 		point_test_rx : out  STD_LOGIC_VECTOR (13 downto 0);
 		
-		----   K7???????     ----
+		----   K7接收参数     ----
 		flag_tx_nread  : out std_logic;
 		flag_agc_arm_ctrl_mode : out std_logic;----k7
 		sync_bit_pre_rx_s : out std_logic_vector(23 downto 0);--k7
@@ -192,13 +192,13 @@ entity arm_interface_write_1 is
         jesd_reset_AD2 : out std_logic;
 		flag_jesd_reset_AD2 : out std_logic;        
         
-		----	???????	-----
-		channel_busy_threshold : out std_logic_vector(15 downto 0);			---- ????????о?????
+		----	信道负载	-----
+		channel_busy_threshold : out std_logic_vector(15 downto 0);			---- 信道负载判决门限
 		
-		channel_capure_threshold : out std_logic_vector(15 downto 0);		---- 24λ?????????о?????
+		channel_capure_threshold : out std_logic_vector(15 downto 0);		---- 24位捕获寄存器判决门限
 
 		Antenna_switch_local			: out  std_logic_vector(15 downto 0);
-		----   ?????????   ----
+		----   频点择优模式   ----
 		dds_clr : out  STD_LOGIC;
 		dds_freq_para_local : out  dds_para_array_type(15 downto 0);
 		counter_switch : out std_logic;
@@ -225,7 +225,7 @@ entity arm_interface_write_1 is
 --        RF_PLL_CEN1 : out  STD_LOGIC;
 --        RF_PLL_CEN2 : out  STD_LOGIC;    
         
-		----jesd????
+		----jesd配置
 		jesd_ila               :  out  std_logic_vector(7 downto 0);
 		flag_jesd_ila          :  out  std_logic;
 		jesd_src               :  out  std_logic_vector(7 downto 0);
@@ -247,7 +247,7 @@ entity arm_interface_write_1 is
 		jesd_erroo             :  out  std_logic_vector(15 downto 0);
 		flag_jesd_erroo        :  out  std_logic;
 		
-		------ ????????  -------
+		------ 精时间同步  -------
 		EN_timestamp_cor : out  STD_LOGIC;
         flag_timestamp_cor : out  STD_LOGIC;
         value_timestamp_cor : out  STD_LOGIC_VECTOR (47 downto 0);	
@@ -263,10 +263,10 @@ entity arm_interface_write_1 is
         doppler_freq_init6 :out std_logic_vector(15 downto 0);
         doppler_freq_init7 :out std_logic_vector(15 downto 0);
         pl_mod : out std_logic;
-        board_mod   : out std_logic_vector(1 downto 0); ---????????????????
-        work_mod : out STD_LOGIC_VECTOR (1 downto 0); ---????????????
-        wave_mod : out std_logic ;  ---??????????????
-        data_en : out std_logic  ;  ---???????????????
+        board_mod   : out std_logic_vector(1 downto 0); ---板间通信和板内自环通信
+        work_mod : out STD_LOGIC_VECTOR (1 downto 0); ---自动模式和手动模式
+        wave_mod : out std_logic ;  ---发射单载波还是发包
+        data_en : out std_logic  ;  ---单载波发射控制开关
         PA_switch_ps : out std_logic;
         LNA_switch_ps: out    std_logic;
         T_R_TTL_ps : out    std_logic;
@@ -300,13 +300,13 @@ entity arm_interface_write_1 is
         T_C3_ps    : out    std_logic;
         T_C4_ps    : out    std_logic;
         T_C5_ps    : out    std_logic;
-        ------ ?????????????λ  -------
+        ------ 初始化完成状态标志位  -------
         initial_complete_state : out    std_logic;
-         ---------??-------------------------            
+         ---------灯-------------------------            
          gpio_warning_internal       : out std_logic   ;
          gpio_power_internal         : out std_logic   ;
         
-        ----   dds ??λ??? (100M DA???)  ----
+        ----   dds 相位赋值 (100M DA输出)  ----
          flag_10M_start                 : out STD_LOGIC;
         s_axis_phase_inc               : out   std_logic_vector(15 downto 0);     
         s_axis_phase_offset_0          : out   std_logic_vector(15 downto 0);
@@ -318,14 +318,14 @@ entity arm_interface_write_1 is
         s_axis_phase_offset_6          : out   std_logic_vector(15 downto 0);
         s_axis_phase_offset_7          : out   std_logic_vector(15 downto 0);
         
-        -- PS ????? ----
+        -- PS 读标志 ----
         flag_lock_reg_PS_read_tx              : out std_logic;      
         flag_lock_reg_PS_read_rx              : out std_logic ;
         EN_time_hopping                      : out   std_logic_vector(3 downto 0);  
-        ----  ??????л??????   ----
+        ----  定频模式切换与选择   ----
         flag_freq_hopping_control             : out std_logic;
         freq_hopping_select                   : out std_logic_vector(3 downto 0);
-        -----------------------TDMA???????-----------------------
+        -----------------------TDMA控制信号-----------------------
         speed_control: out STD_LOGIC_VECTOR (1 downto 0);
         EN_timebase : out  STD_LOGIC;
         num_frame_timeslot : out  STD_LOGIC_VECTOR (9 downto 0);					
@@ -337,10 +337,10 @@ entity arm_interface_write_1 is
         flag_timeslot_adj : out  STD_LOGIC;											
         value_timeslot_adj : out  STD_LOGIC_VECTOR (9 downto 0);
         master_or_slave           : out std_logic_vector(1 downto 0);
-        length_mod                : out  std_logic_vector(15 downto 0);--????????bit??
+        length_mod                : out  std_logic_vector(15 downto 0);--配置帧单元bit数
         length_mod_offset         : out  std_logic_vector(15 downto 0);
-        TDMA_SPMA_switch          : out  STD_LOGIC;	-- TDMA?0??SPMA?1
-        ----  GPS???   ----
+        TDMA_SPMA_switch          : out  STD_LOGIC;	-- TDMA为0，SPMA为1
+        ----  GPS使能   ----
         en_gps                                : out std_logic ;
         
         ----    fft     ----
@@ -403,7 +403,7 @@ entity arm_interface_write_1 is
 end arm_interface_write_1;
 
 architecture Behavioral of arm_interface_write_1 is	
-------------------------------???????-------------------------------------------
+------------------------------地址定义-------------------------------------------
 ----		common
 constant ADDR_REG_INITIAL : std_logic_vector(11 downto 0) := x"002";
 constant ADDR_REG_TX_MODE : std_logic_vector(11 downto 0) := x"004";
@@ -412,13 +412,13 @@ constant ADDR_TX_PACKET_TIME_INTERVAL_high : std_logic_vector(11 downto 0) := x"
 constant ADDR_PULSE_NUM_THRESHOLD : std_logic_vector(11 downto 0) := x"008";
 constant ADDR_SYNC_XCORR_THRESHOLD : std_logic_vector(11 downto 0) := x"00A";
 constant ADDR_counter_switch: std_logic_vector(11 downto 0) := x"00C";
-constant ADDR_ANT_SEL: std_logic_vector(11 downto 0) := x"00E";  --???????
+constant ADDR_ANT_SEL: std_logic_vector(11 downto 0) := x"00E";  --天线选择
 constant ADDR_PULSE_FRAMER_LENGTH : std_logic_vector(11 downto 0) := x"0E6";
 ----		DA9739
 constant ADDR_REG_AD9739_CONFIG_WRDATA : std_logic_vector(11 downto 0) := x"010";
 ----		AD9680
 constant ADDR_REG_AD9680_CONFIG_WRDATA : std_logic_vector(11 downto 0) := x"012";
-constant ADDR_REG_AD9680_2_CONFIG_WRDATA : std_logic_vector(11 downto 0) := x"03C"; --??????
+constant ADDR_REG_AD9680_2_CONFIG_WRDATA : std_logic_vector(11 downto 0) := x"03C"; --重复使用
 
 ----  	RF_PLL
 constant ADDR_RF_PLL_TxRx_LOW                                                  : std_logic_vector(11 downto 0) := x"014";
@@ -441,7 +441,7 @@ constant ADDR_REG_AD9520_CONFIG_WRDATA_H:std_logic_vector(11 downto 0) := x"030"
 constant ADDR_REG_AD9520_CONFIG_WRDATA_L:std_logic_vector(11 downto 0) := x"032";
 constant ADDR_REG_AD9520_RESET_PLL:std_logic_vector(11 downto 0)        := x"034";
 
----------????-----------------------------
+---------光纤-----------------------------
 constant ADDR_CONTRL_8506:std_logic_vector(11 downto 0)        := x"03e";
 
 ----		tx
@@ -499,7 +499,7 @@ constant ADDR_TIME_HOPPING_X4 : std_logic_vector(11 downto 0) := x"08e";
 constant ADDR_PN_DEINTERLEAVE : std_logic_vector(11 downto 0) := x"090";
 constant ADDR_RX_PN_DESCRAMBLE : std_logic_vector(11 downto 0) := x"092";
 constant ADDR_TX_NREAD : std_logic_vector(11 downto 0) := x"094";--K7
-constant ADDR_RX_CONFIG_COMPLETE : std_logic_vector(11 downto 0) := x"06c";--??????????????? start_rx
+constant ADDR_RX_CONFIG_COMPLETE : std_logic_vector(11 downto 0) := x"06c";--配置完成，开始接受 start_rx
 constant ADDR_RX_RATE_MODE : std_logic_vector(11 downto 0) := x"06e"; --100/000
 constant ADDR_POINT_TEST_RX : std_logic_vector(11 downto 0) := x"06a";
 
@@ -523,7 +523,7 @@ constant ADDR_STATUS_ADHOC : std_logic_vector(11 downto 0) := x"0FE";
 constant ADDR_REG_jesd_reset_AD2 : std_logic_vector(11 downto 0) := x"0B6";
 
 constant ADDR_PROGRAM_CONFIG_FPGA2 : std_logic_vector(11 downto 0) := x"068";
-----    K7 ??????????????????    ----
+----    K7 时间同步计数器清零标志    ----
 constant ADDR_RESET_TIME : std_logic_vector(11 downto 0) := x"0E8";
 ----K7 jesd
 constant ADDR_ILA : std_logic_vector(11 downto 0) := x"052";
@@ -541,11 +541,11 @@ constant ADDR_LNA_switch_hand_1 : std_logic_vector(11 downto 0) := x"040";
 constant ADDR_LNA_switch_hand_2 : std_logic_vector(11 downto 0) := x"04a";
 constant ADDR_PA_switch_hand    : std_logic_vector(11 downto 0) := x"04c";
 
--------------- ?????????????λ -----------
+-------------- 初始化完成状态标志位 -----------
 constant ADDR_initial_complete_state    : std_logic_vector(11 downto 0) := x"100";
 
 
--------------- ???????? -----------
+-------------- 精时间同步 -----------
 constant ADDR_EN_timestamp_cor                       : std_logic_vector(11 downto 0) := x"152";
 constant ADDR_flag_timestamp_cor                     : std_logic_vector(11 downto 0) := x"154";
 constant ADDR_polarity_cor                           : std_logic_vector(11 downto 0) := x"156";
@@ -557,7 +557,7 @@ constant ADDR_value_timestamp_cor_2                  : std_logic_vector(11 downt
 
 
 
-----  ????????    ----
+----  多普勒频偏    ----
 constant ADDR_DOPPLER_FREQ : std_logic_vector(11 downto 0) := x"160";
 constant ADDR_DOPPLER_FREQ_init_0 : std_logic_vector(11 downto 0) := x"164";
 constant ADDR_DOPPLER_FREQ_init_1 : std_logic_vector(11 downto 0) := x"166";
@@ -568,7 +568,7 @@ constant ADDR_DOPPLER_FREQ_init_5 : std_logic_vector(11 downto 0) := x"16E";
 constant ADDR_DOPPLER_FREQ_init_6 : std_logic_vector(11 downto 0) := x"170";
 constant ADDR_DOPPLER_FREQ_init_7 : std_logic_vector(11 downto 0) := x"172";
 
---------   ???     --------
+--------   射频     --------
 constant ADDR_PA_switch_ps : std_logic_vector(11 downto 0) := x"176";
 constant ADDR_T_R_TTL : std_logic_vector(11 downto 0) := x"178";
 constant ADDR_LNA_switch_ps : std_logic_vector(11 downto 0) := x"18C";
@@ -585,7 +585,7 @@ constant ADDR_R2 : std_logic_vector(11 downto 0) := x"208";--old20E
 constant ADDR_T : std_logic_vector(11 downto 0) := x"17C";
 constant ADDR_work_mod : std_logic_vector(11 downto 0) := x"17E";
 
------ ?????? ---------
+----- 测试模式 ---------
 constant ADDR_pl_mod : std_logic_vector(11 downto 0) := x"162";
 constant ADDR_data_en : std_logic_vector(11 downto 0) := x"180";
 constant ADDR_board_mod : std_logic_vector(11 downto 0) := x"182";
@@ -602,14 +602,14 @@ constant ADDR_THRESHOLD_WIDTH : std_logic_vector(11 downto 0) := x"198";
 constant ADDR_THRESHOLD_INSIDE : std_logic_vector(11 downto 0) := x"19A";
 constant ADDR_THRESHOLD_CENTER : std_logic_vector(11 downto 0) := x"19C";
 constant ADDR_RESPONSE_TIME : std_logic_vector(11 downto 0) := x"19E";
-----------------------------???????----------------
+----------------------------数字衰减----------------
 constant ADDR_shift_config_value :std_logic_vector(11 downto 0) := x"18E";
 constant ADDR_shift_din_value:   std_logic_vector(11 downto 0) := x"20E";
 
----------------------------?????????????----------------------
+---------------------------跳时跳频图案控制----------------------
 constant ADDR_EN_time_hopping :   std_logic_vector(11 downto 0) := x"174";
 
-------  DAC 100M?????????    ----
+------  DAC 100M输出频率测试    ----
 --constant ADDR_flag_10M_start   :  std_logic_vector(11 downto 0) := x"222";
 --constant ADDR_DAC_OUTPUT_FREQ_INC : std_logic_vector(11 downto 0) := x"220";
 --constant ADDR_DAC_OUTPUT_FREQ_init_0 : std_logic_vector(11 downto 0) := x"224";
@@ -621,11 +621,11 @@ constant ADDR_EN_time_hopping :   std_logic_vector(11 downto 0) := x"174";
 --constant ADDR_DAC_OUTPUT_FREQ_init_6 : std_logic_vector(11 downto 0) := x"230";
 --constant ADDR_DAC_OUTPUT_FREQ_init_7 : std_logic_vector(11 downto 0) := x"232";
 
-----  ??????л??????   ----
+----  定频模式切换与选择   ----
 constant ADDR_flag_freq_hopping_control     : std_logic_vector(11 downto 0) := x"210";
 constant ADDR_freq_hopping_select           : std_logic_vector(11 downto 0) := x"212";
 
-----  GPS???   ----
+----  GPS使能   ----
 constant ADDR_en_gps           : std_logic_vector(11 downto 0) := x"214";
 ---------TDMA---------------
 constant ADDR_EN_timebase                               : std_logic_vector(11 downto 0) := x"234";
@@ -640,7 +640,7 @@ constant ADDR_master_or_slave                           : std_logic_vector(11 do
 constant ADDR_length_mod                                : std_logic_vector(11 downto 0) := x"246";
 constant ADDR_length_mod_offset                         : std_logic_vector(11 downto 0) := x"248";
 constant ADDR_TDMA_SPMA_switch                          : std_logic_vector(11 downto 0) := x"250";
-----  REG_NUM??????    ----
+----  REG_NUM锁存标志    ----
 constant ADDR_flag_lock_reg_PS_read           : std_logic_vector(11 downto 0) := x"302";
 
 
@@ -679,12 +679,12 @@ constant ADDR_flag_rdy_wideband                               : std_logic_vector
 constant ADDR_flag_xdma_test_rdy                              : std_logic_vector(11 downto 0) := x"400";
 constant ADDR_xdma_stop                              : std_logic_vector(11 downto 0) := x"402";
 
----------??-------------------------             
+---------灯-------------------------             
 constant ADDR_gpio_warning_internal       : std_logic_vector(11 downto 0) := x"316";
 constant ADDR_gpio_power_internal         : std_logic_vector(11 downto 0) := x"318";
 
 
-----  ????????    ----
+----  多普勒频偏    ----
 constant ADDR_configurable_freq_hopping_phase_inc : std_logic_vector(11 downto 0) := x"220";
 constant ADDR_configurable_freq_hopping_phase_init_0 : std_logic_vector(11 downto 0) := x"224";
 constant ADDR_configurable_freq_hopping_phase_init_1 : std_logic_vector(11 downto 0) := x"226";
@@ -761,7 +761,7 @@ signal dds_poff_qpsk_ps_6 : std_logic_vector(15 downto 0);
 signal dds_poff_qpsk_ps_7 : std_logic_vector(15 downto 0);
 signal value_timeslot_adj_internal : std_logic;
 
-signal flag_lock_reg_PS_read   :  std_logic_vector(1 downto 0); --- ??λ?????????λ??????
+signal flag_lock_reg_PS_read   :  std_logic_vector(1 downto 0); --- 高位为发射端，低位为接收端
 signal counter_sync_bit_pre : std_logic_vector(3 downto 0);
 signal counter_sync_bit_post : std_logic_vector(3 downto 0);
 signal flag_wr_sync_bit_pre_internal : std_logic;
@@ -857,7 +857,7 @@ signal ps_addr : std_logic_vector(11 downto 0);
 
 signal flag_offset_time_adjust_internal : std_logic;
 signal flag_offset_time_adjust_internal_k7 : std_logic;
-----K7????
+----K7参数
 signal flag_agc_arm_ctrl_mode_internal : std_logic;
 signal flag_point_test_rx_internal : std_logic;
 signal ram_PN_descramble_we_local : std_logic;
@@ -955,10 +955,10 @@ end process;
 --						& DATA_ARM(12) & DATA_ARM(13) & DATA_ARM(14) & DATA_ARM(15);
 
 ----------------------------------------------------------------------------
------------------------------??????????-------------------------------------
--------------------------x"0000" : ????????---------------------------------
--------------------------x"0001" : ???????????--------------------------------
-------------------------???????????PN???д???????----------------------------
+-----------------------------初始化寄存器-------------------------------------
+-------------------------x"0000" : 初始化阶段---------------------------------
+-------------------------x"0001" : 正常工作阶段--------------------------------
+------------------------正常工作阶段PN库的写地址归零----------------------------
 ----------------------------------------------------------------------------
 process(reset_128M,clk_128M)
 begin
@@ -974,10 +974,10 @@ begin
 end process;
 
 ----------------------------------------------------------------------------
----------------------------???????????-------------------------------------
--------------------------x"XXJ0" : ??????????,"XX"??"0"MSK,"1"GMSK-0.5-----
--------------------------x"XXJ1" : ?????????,"XX"??????-------------------
--------------------------x"XXJX" : J ??????????? J????DA?????λ?? 0???????λ???????????? 7?????7λ ?????????С ????7*6dB-------------------
+---------------------------发射模式寄存器-------------------------------------
+-------------------------x"XXJ0" : 正常工作模式,"XX"："0"MSK,"1"GMSK-0.5-----
+-------------------------x"XXJ1" : 载波发射模式,"XX"为载波号-------------------
+-------------------------x"XXJX" : J 调整输出功率 J代表DA输入截位数 0表示不截位，输出功率最大 7表示截7位 输出功率最小 衰减为7*6dB-------------------
 ----------------------------------------------------------------------------
 process(reset_128M,clk_128M)
 begin
@@ -995,7 +995,7 @@ begin
 end process;
 
 ----------------------------------------------------------------------------
--------------------------???????-------------------------------------------
+-------------------------帧长设置-------------------------------------------
 ----------------------------------------------------------------------------
 process(reset_128M,clk_128M)
 begin
@@ -1011,7 +1011,7 @@ begin
 end process;
 
 ----------------------------------------------------------------------------
--------------------------K7 FPGA??????-------------------------------------------
+-------------------------K7 FPGA加载标志-------------------------------------------
 ----------------------------------------------------------------------------
 process(reset,clk)
 begin
@@ -1027,7 +1027,7 @@ begin
 end process;
 
 ----------------------------------------------------------------------------
--------------------------K7 ??????????????????-------------------------------------------
+-------------------------K7 时间同步计数器清零标志-------------------------------------------
 ----------------------------------------------------------------------------
 process(reset_128M,clk_128M)
 begin
@@ -1043,14 +1043,14 @@ begin
 end process;
 
 ----------------------------------------------------------------------------
----------------------------???????????ü????----------------------------------
--------------1. ????????????????12??????,?????????????24--------------------
---------------------2. ??????????????????????8464------------------------
+---------------------------接收门限设置寄存器----------------------------------
+-------------1. 脉冲数门限寄存器，12个脉冲,前后同步头，最大值24--------------------
+--------------------2. 同步相关门限寄存器，最大值约为8464------------------------
 ----------------------------------------------------------------------------
 process(reset_128M,clk_128M)
 begin
 	if reset_128M = '0' then
-		threshold_pulse_num <= "00011";		----	????3
+		threshold_pulse_num <= "00011";		----	默认值3
 	elsif clk_128M'event and clk_128M = '1' then
 		if ps_cen = '0' and ps_wen = '0' then
 			if ps_addr = ADDR_PULSE_NUM_THRESHOLD then
@@ -1063,7 +1063,7 @@ end process;
 process(reset_128M,clk_128M)
 begin
 	if reset_128M = '0' then
-		threshold_sync_xcorr <= x"0E10";		----	????3600
+		threshold_sync_xcorr <= x"0E10";		----	默认值3600
 	elsif clk_128M'event and clk_128M = '1' then
 		if ps_cen = '0' and ps_wen = '0' then
 			if ps_addr = ADDR_SYNC_XCORR_THRESHOLD then
@@ -1118,12 +1118,12 @@ U47 : falling_edge_detector Port map ( reset => reset_128M,
 									   dout  => flag_threshold_sync_xcorr );
 
 ----------------------------------------------------------------------------
------------------------------	???????	-------------------------------
+-----------------------------	信道负载	-------------------------------
 ----------------------------------------------------------------------------
 process(reset_128M,clk_128M)
 begin
 	if reset_128M = '0' then
-		channel_busy_threshold <= x"1194";		----	????4500
+		channel_busy_threshold <= x"1194";		----	默认值4500
 	elsif clk_128M'event and clk_128M = '1' then
 		if ps_cen = '0' and ps_wen = '0' then
 			if ps_addr = ADDR_CHANNEL_BUSY_THRESHOLD then
@@ -1156,12 +1156,12 @@ U48 : falling_edge_detector Port map ( reset => reset_128M,
 									   dout  => flag_channel_busy_threshold );
 
 ----------------------------------------------------------------------------
------------------------------	??????? 24λ???岶???????о?????	-------------------------------
+-----------------------------	信道捕获 24位脉冲捕获寄存器判决门限	-------------------------------
 ----------------------------------------------------------------------------
 process(reset_128M,clk_128M)
 begin
 	if reset_128M = '0' then
-		channel_capure_threshold <= x"08FC";		----	????2300
+		channel_capure_threshold <= x"08FC";		----	默认值2300
 	elsif clk_128M'event and clk_128M = '1' then
 		if ps_cen = '0' and ps_wen = '0' then
 			if ps_addr = ADDR_CHANNEL_CAPTURE_THRESHOLD then
@@ -1194,12 +1194,12 @@ U49 : falling_edge_detector Port map ( reset => reset_128M,
 									   dout  => flag_channel_capure_threshold );
 
 ----------------------------------------------------------------------------
----------------------------????? ????????????????----------------------------------
+---------------------------发射端 每包数据之间的时间间隙----------------------------------
 ----------------------------------------------------------------------------
 process(reset_128M,clk_128M)
 begin
 	if reset_128M = '0' then
-		packet_time_interval <= (others => '0');		----	????0 ????????
+		packet_time_interval <= (others => '0');		----	默认值0 没有时间间隔
 	elsif clk_128M'event and clk_128M = '1' then
 		if ps_cen = '0' and ps_wen = '0' then
 			if ps_addr = ADDR_TX_PACKET_TIME_INTERVAL_low then
@@ -1214,7 +1214,7 @@ end process;
 
 
 ----------------------------------------------------------------------------
------------------------------	???????	-------------------------------
+-----------------------------	天线选择	-------------------------------
 ----------------------------------------------------------------------------
 process(reset_128M,clk_128M)
 begin
@@ -1252,7 +1252,7 @@ U50 : falling_edge_detector Port map ( reset => reset_128M,
 									   dout  => flag_Antenna_switch_local );
 									  
 ----------------------------------------------------------------------------
-----------------------------??   ??  -----------------------------------------------------------------
+----------------------------光   纤  -----------------------------------------------------------------
 ----------------------------------------------------------------------------
 process(reset_128M,clk_128M)
 begin
@@ -1268,7 +1268,7 @@ begin
 end process;
 
 ----------------------------------------------------------------------------
------------------------------DAC????? AD9739-------------------------------
+-----------------------------DAC初始化 AD9739-------------------------------
 ----------------------------------------------------------------------------
 --process(reset_128M,clk_128M)
 --begin
@@ -1306,7 +1306,7 @@ end process;
 --												  din => flag_AD9739_config_internal,
 --												  dout => flag_AD9739_config );
 ----------------------------------------------------------------------------
------------------------------ADC?????--------------------------------------
+-----------------------------ADC初始化--------------------------------------
 -------------------------          AD9680 ----------------------------------
 ----------------------------------------------------------------------------
 --process(reset_128M,clk_128M)
@@ -1346,7 +1346,7 @@ end process;
 --												  din => flag_AD9680_config_internal,
 --												  dout => flag_AD9680_config );	
 ----------------------------------------------------------------------------
------------------------------ADC?????--------------------------------------
+-----------------------------ADC初始化--------------------------------------
 -------------------------          AD9680_2 ----------------------------------
 ----------------------------------------------------------------------------
 --process(reset_128M,clk_128M)
@@ -1456,7 +1456,7 @@ end process;
 
 												  
 ----------------------------------------------------------------------------
------------------------------PLL?????--------------------------------------
+-----------------------------PLL初始化--------------------------------------
 -------------------------          AD9520 ----------------------------------
 ----------------------------------------------------------------------------
 --process(reset,clk)
@@ -1525,7 +1525,7 @@ end process;
 --	end if;
 --end process;
 
--------------------------AD5XXX????????·????????·?????-------------
+-------------------------AD5XXX配置，先下发模式，再下发数据-------------
 --process(reset,clk)
 --begin
 --	if reset = '0' then
@@ -1577,7 +1577,7 @@ end process;
 --												   dout => flag_AD5XXX_config);	
 
 ----------------------------------------------------------------------------
-----------------------------AGC arm?????------------------------------------
+----------------------------AGC arm控衰减------------------------------------
 ----------------------------------------------------------------------------
 --process(reset_128M,clk_128M)
 --begin
@@ -1713,7 +1713,7 @@ U5 : falling_edge_detector Port map ( reset => reset_128M,
 												  dout => agc_arm_ctrl_q );
 
 ----------------------------------------------------------------------------
----------------------------PN??????----------------------------------------
+---------------------------PN库初始化----------------------------------------
 --------------------        1. sync           ------------------------------
 --------------------        2. PAn            ------------------------------
 --------------------        3. scramble       ------------------------------
@@ -1866,15 +1866,15 @@ U11 : falling_edge_detector Port map ( reset => reset_128M,
 												  dout => ram_PN_interleave_we );		
 
 ----------------------------------------------------------------------------
----------------------------ARM?·?????---------------------------------------
-----------------			0. ?·?????????							-------------------
-----------------			1. ?·?????????							-------------------
-----------------			2. ?·??????????sync???????	  		-------------------
-----------------			3. ?·????????							-------------------
-----------------			4. ?·???????????????????????		-------------------
+---------------------------ARM下发数据---------------------------------------
+----------------			0. 下发发射请求							-------------------
+----------------			1. 下发发射数据							-------------------
+----------------			2. 下发跳频参数和sync索引地址	  		-------------------
+----------------			3. 下发跳时参数							-------------------
+----------------			4. 下发发射类型（也作为结束标志）		-------------------
 ----------------------------------------------------------------------------
 
---------		0. ????????		--------
+--------		0. 发射请求		--------
 process(reset_128M,clk_128M)
 begin
 	if reset_128M = '0' then
@@ -1917,20 +1917,20 @@ begin
 		ram_tx_interface_buffer_din_type <= (others => '0');
 	elsif clk_128M'event and clk_128M = '1' then
 		if ps_cen = '0' and ps_wen = '0' then
-			if ps_addr = ADDR_TX_DATA then								--------		1.????????		----------
+			if ps_addr = ADDR_TX_DATA then								--------		1.发射数据		----------
 				ram_tx_interface_buffer_din_type <= "00";	
-			elsif ps_addr = ADDR_FREQ_HOPPING_PN_SYNC_ADDR then	--------		2. ?????????sync???????		---------
+			elsif ps_addr = ADDR_FREQ_HOPPING_PN_SYNC_ADDR then	--------		2. 跳频参数和sync索引地址		---------
 				ram_tx_interface_buffer_din_type <= "01";	
-			elsif ps_addr = ADDR_TIME_HOPPING then					--------		3. ???????		--------
+			elsif ps_addr = ADDR_TIME_HOPPING then					--------		3. 跳时参数		--------
 				ram_tx_interface_buffer_din_type <= "10";
-			elsif ps_addr = ADDR_TX_PULSE_TYPE then					--------		4. ?·???????????????????????		--------
+			elsif ps_addr = ADDR_TX_PULSE_TYPE then					--------		4. 下发发射类型（也作为结束标志）		--------
 				ram_tx_interface_buffer_din_type <= "11";
 			end if;
 		end if;
 	end if;
 end process;																						  
 
---------		0. ????????_1		--------
+--------		0. 发射请求_1		--------
 process(reset_128M,clk_128M)
 begin
 	if reset_128M = '0' then
@@ -1973,19 +1973,19 @@ begin
 		ram_tx_interface_buffer_din_type_1 <= (others => '0');
 	elsif clk_128M'event and clk_128M = '1' then
 		if ps_cen = '0' and ps_wen = '0' then
-			if ps_addr = ADDR_TX_DATA_1 then								--------		1.????????		----------
+			if ps_addr = ADDR_TX_DATA_1 then								--------		1.发射数据		----------
 				ram_tx_interface_buffer_din_type_1 <= "00";	
-			elsif ps_addr = ADDR_FREQ_HOPPING_PN_SYNC_ADDR_1 then	--------		2. ?????????sync???????		---------
+			elsif ps_addr = ADDR_FREQ_HOPPING_PN_SYNC_ADDR_1 then	--------		2. 跳频参数和sync索引地址		---------
 				ram_tx_interface_buffer_din_type_1 <= "01";	
-			elsif ps_addr = ADDR_TIME_HOPPING_1 then					--------		3. ???????		--------
+			elsif ps_addr = ADDR_TIME_HOPPING_1 then					--------		3. 跳时参数		--------
 				ram_tx_interface_buffer_din_type_1 <= "10";
-			elsif ps_addr = ADDR_TX_PULSE_TYPE_1 then					--------		4. ?·???????????????????????		--------
+			elsif ps_addr = ADDR_TX_PULSE_TYPE_1 then					--------		4. 下发发射类型（也作为结束标志）		--------
 				ram_tx_interface_buffer_din_type_1 <= "11";
 			end if;
 		end if;
 	end if;
 end process;																						  
---------		0. ????????_2		--------
+--------		0. 发射请求_2		--------
 process(reset_128M,clk_128M)
 begin
 	if reset_128M = '0' then
@@ -2028,13 +2028,13 @@ begin
 		ram_tx_interface_buffer_din_type_2 <= (others => '0');
 	elsif clk_128M'event and clk_128M = '1' then
 		if ps_cen = '0' and ps_wen = '0' then
-			if ps_addr = ADDR_TX_DATA_2 then								--------		1.????????		----------
+			if ps_addr = ADDR_TX_DATA_2 then								--------		1.发射数据		----------
 				ram_tx_interface_buffer_din_type_2 <= "00";	
-			elsif ps_addr = ADDR_FREQ_HOPPING_PN_SYNC_ADDR_2 then	--------		2. ?????????sync???????		---------
+			elsif ps_addr = ADDR_FREQ_HOPPING_PN_SYNC_ADDR_2 then	--------		2. 跳频参数和sync索引地址		---------
 				ram_tx_interface_buffer_din_type_2 <= "01";	
-			elsif ps_addr = ADDR_TIME_HOPPING_2 then					--------		3. ???????		--------
+			elsif ps_addr = ADDR_TIME_HOPPING_2 then					--------		3. 跳时参数		--------
 				ram_tx_interface_buffer_din_type_2 <= "10";
-			elsif ps_addr = ADDR_TX_PULSE_TYPE_2 then					--------		4. ?·???????????????????????		--------
+			elsif ps_addr = ADDR_TX_PULSE_TYPE_2 then					--------		4. 下发发射类型（也作为结束标志）		--------
 				ram_tx_interface_buffer_din_type_2 <= "11";
 			end if;
 		end if;
@@ -2044,7 +2044,7 @@ end process;
 
 
 ----------------------------------------------------------------------------
----------------------------ARM????????---------------------------------------
+---------------------------ARM接收数据---------------------------------------
 ----------------------------------------------------------------------------
 process(reset_128M, clk_128M)
 begin
@@ -2158,7 +2158,7 @@ U99 : falling_edge_detector PORT MAP ( reset => reset,
 												   din  => falg_irq_k_end_internal,
 												   dout => falg_irq_k_end);												   
 												   
-----????ж???????												   
+----空口中断结束信号												   
 process(reset_128M, clk_128M)
 begin
 	if reset_128M = '0' then
@@ -2182,10 +2182,10 @@ U98 : falling_edge_detector PORT MAP ( reset => reset_128M,
 												   dout => falg_irq_k_end_k );												   
 
 ----------------------------------------------------------------------------
----------------------------???????????-------------------------------------
+---------------------------接收参数配置-------------------------------------
 ----------------------------------------------------------------------------
 
-----	sync_bit???β??????15???????15?????
+----	sync_bit：头尾各配置15个，对应15个频点
 
 process(reset_128M, clk_128M)
 begin
@@ -2395,7 +2395,7 @@ begin
 		end if;
 	end if;
 end process;
-----	??????
+----	跳频图案
 
 ----	X1
 process(reset_128M,clk_128M)
@@ -2557,7 +2557,7 @@ U42 : falling_edge_detector PORT MAP ( reset => reset_128M,
 									   din => flag_pattern_freq_rx_x4_internal,
 									   dout => flag_pattern_freq_rx_x4 );
 
-----	???????
+----	跳时参数
 process(reset_128M, clk_128M)
 begin
 	if reset_128M = '0' then
@@ -2890,7 +2890,7 @@ begin
 	end if;
 end process;
 
-----	???????
+----	交织参数
 process(reset_128M, clk_128M)
 begin
 	if reset_128M = '0' then
@@ -2970,7 +2970,7 @@ begin
 	end if;
 end process;
 
-----	???????
+----	解扰参数
 
 process(reset_128M,clk_128M)
 begin
@@ -3010,7 +3010,7 @@ U22 : falling_edge_detector Port map ( reset => reset_128M,
 flag_ram_PN_descramble_din <= ram_PN_descramble_we_local;
 ram_PN_descramble_we <= ram_PN_descramble_we_local;
 
-----	????????????????
+----	接收参数配置完成标志
 
 process(reset_128M,clk_128M)
 begin
@@ -3095,7 +3095,7 @@ begin
 	elsif clk_128M'event and clk_128M = '1' then
 		if ps_cen = '0' and ps_wen = '0' then
 			if ps_addr = ADDR_PA_SWITCH then								
-				arm_config_switch <= ps_dout(2 downto 0);	---2-LNAQ(??????) 1-LNA,0-PA
+				arm_config_switch <= ps_dout(2 downto 0);	---2-LNAQ(默认不用) 1-LNA,0-PA
 			end if;
 		end if;
 	end if;
@@ -3206,7 +3206,7 @@ U51 : falling_edge_detector Port map ( reset => reset_128M,
 
 --------------------------------------------------------------------------
 --------------------------------------------------------------------------
---------------                ?????????                  ----------------
+--------------                频点择优模式                  ----------------
 --------------------------------------------------------------------------
 --------------------------------------------------------------------------
 ----	freq_mode
@@ -3492,7 +3492,7 @@ U56 : falling_edge_detector Port map ( reset => reset_128M,
 												   din => flag_offset_time_adjust_internal_k7,
 												   dout => flag_offset_time_adjust_k7);
 
-----jesd????
+----jesd配置
 ----ILA
 process(reset_128M,clk_128M)
 begin
@@ -3882,7 +3882,7 @@ U60 : falling_edge_detector Port map ( reset => reset_128M,
 									   dout  => flag_tx_nread);	
 
 ----------------------------------------------------------------------------
---------------------------RF_PLL_TxRx?????----------------------------------
+--------------------------RF_PLL_TxRx初始化----------------------------------
 ----------------------------------------------------------------------------
 process(reset,clk)
 begin
@@ -3906,7 +3906,7 @@ U61 : falling_edge_detector Port map ( reset => reset,
                                        din => flag_RF_PLL_TxRx_internal,
                                        dout => flag_RF_PLL_TxRx_configuration );
 ----------------------------------------------------------------------------
---------------------------RF_PLL_CLK?????-----------------------------------
+--------------------------RF_PLL_CLK初始化-----------------------------------
 ----------------------------------------------------------------------------
 process(reset,clk)
 begin
@@ -3948,7 +3948,7 @@ begin
     end if;
 end process;  
 ----------------------------------------------------------------------------
----------------------------RF_PLL_CEN?????----------------------------------
+---------------------------RF_PLL_CEN初始化----------------------------------
 ----------------------------------------------------------------------------
 --process(reset, clk)
 --begin
@@ -3965,7 +3965,7 @@ end process;
 --    end if;
 --end process;
 -----------------------------------------------------------------------
----------------------------   ????   ----------------------------------
+---------------------------   功放   ----------------------------------
 -----------------------------------------------------------------------
 
 
@@ -4082,7 +4082,7 @@ end process;
 
 
 -----------------------------------------------------------------------
----------------------------   ??????????  -------------------------
+---------------------------   模拟多普勒频偏  -------------------------
 -----------------------------------------------------------------------
 
 
@@ -4222,7 +4222,7 @@ begin
 	end if;
 end process;
 
--------  ???  -------
+-------  射频  -------
 process(reset_128M,clk_128M)
 begin
 	if reset_128M = '0' then
@@ -4732,7 +4732,7 @@ begin
 	end if;
 end process;
 -------------------------------------------------------------------------
------------------------------    DAC???????    -------------------------
+-----------------------------    DAC输出测试    -------------------------
 -------------------------------------------------------------------------
 
 --process(reset_128M,clk_128M)
@@ -4893,7 +4893,7 @@ flag_lock_reg_PS_read_rx <= flag_lock_reg_PS_read_rx_internal;
 process(reset_128M,clk_128M)
 begin
 	if reset_128M = '0' then
-		EN_time_hopping <= (others => '0');  -----?????????ο???X1??X2??X3??X4
+		EN_time_hopping <= (others => '0');  -----从高到低依次控制X1、X2、X3、X4
 	elsif clk_128M'event and clk_128M = '1' then
 		if ps_cen = '0' and ps_wen = '0' then
 			if ps_addr = ADDR_EN_time_hopping then
@@ -4903,7 +4903,7 @@ begin
 	end if;
 end process;
 
-----  ??????л??????   ----
+----  定频模式切换与选择   ----
 process(reset_128M,clk_128M)
 begin
 	if reset_128M = '0' then
@@ -5099,7 +5099,7 @@ end process;
 process(reset_128M,clk)
 begin
 	if reset_128M = '0' then
-		master_or_slave <= "01";--??????
+		master_or_slave <= "01";--默认为主
 	elsif clk_128M'event and clk_128M = '1' then
 		if ps_cen = '0' and ps_wen = '0' then
 			if ps_addr = ADDR_master_or_slave then
@@ -5138,7 +5138,7 @@ end process;
 process(reset_128M,clk)
 begin
 	if reset_128M = '0' then
-		TDMA_SPMA_switch <=  '1';--?????SPMA
+		TDMA_SPMA_switch <=  '1';--默认是SPMA
 	elsif clk_128M'event and clk_128M = '1' then
 		if ps_cen = '0' and ps_wen = '0' then
 			if ps_addr = ADDR_TDMA_SPMA_switch then
@@ -5367,7 +5367,7 @@ end process;
 
 
 -------------------------------------------------------------------------
------------------------------    ?????????????λ??    ----------------
+-----------------------------    可配置定频频率相位字    ----------------
 -------------------------------------------------------------------------
 
 process(reset_128M,clk_128M)
