@@ -23,26 +23,26 @@ static void dds_set_frequency(u16 pinc_addr, u16 poff_base, double freq_point)
 {
     printf("frequency point : %lf MHz \r\n", freq_point);
 
-    double data;
     double fs = DDS_CLOCK_MHZ * (1e+6);
-    data = 65536 * freq_point * (1e+6) / fs;
+    double data = 65536.0 * freq_point * (1e+6) / fs;   /* 相位增量（LSB），负频时为负 */
 
-    u16 writeData;
-    int i;
+    int  i;
+    long inc, poff;
 
     emc_write(DDS_REG_RESET, 0);    /* dds 复位 */
 
     /* 频率增量 */
-    writeData = (u16)(data + 0.5);
-    emc_write(pinc_addr, writeData);
-    printf("write pinc : 0x%x \r\n", writeData);
+    inc = (data >= 0.0) ? (long)(data + 0.5) : (long)(data - 0.5);  /* 四舍五入 */
+    emc_write(pinc_addr, (u16)((unsigned long)inc & 0xFFFFUL));     /* mod 2^16 回绕成补码 */
+    printf("write pinc : 0x%x \r\n", (unsigned)inc & 0xFFFF);
 
     /* 各通道相位偏移 */
     for (i = 0; i < DDS_PARALLEL_NUM; i++)
     {
-        writeData = (u16)((data * i / (double)DDS_PARALLEL_NUM) + 0.5);
-        emc_write((u16)(poff_base + 2 * i), writeData);
-        printf("write poff[%d] : 0x%x \r\n", i, writeData);
+        poff = (data >= 0.0) ? (long)(data*i/(double)DDS_PARALLEL_NUM + 0.5)
+                             : (long)(data*i/(double)DDS_PARALLEL_NUM - 0.5);  /* 四舍五入 */
+        emc_write((u16)(poff_base + 2 * i), (u16)((unsigned long)poff & 0xFFFFUL));
+        printf("write poff[%d] : 0x%x \r\n", i, (unsigned)poff & 0xFFFF);
     }
 
     emc_write(DDS_REG_RESET, 1);    /* 解除 dds 复位 */
