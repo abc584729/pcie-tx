@@ -26,7 +26,7 @@ socket has no frame header and no CRC):
     listening port, see adhocSoft.c).
 
 Examples:
-    cd /d %USERPROFILE%\Desktops
+    cd /d 
     python send_tx_init.py --ip 192.168.1.10 --bpsk-en 1 --bpsk-freq 100 --bpsk-atten 0 --bpsk-en 1 --qpsk-en 1 --qpsk-freq 200 --bpsk-atten 0
 """
 
