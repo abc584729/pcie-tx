@@ -26,14 +26,8 @@ socket has no frame header and no CRC):
     listening port, see adhocSoft.c).
 
 Examples:
-    python3 send_tx_init.py                                  # defaults (same as tx_init)
-    python3 send_tx_init.py --ip 192.168.1.10 --port 14147 \
-        --bpsk-en 1 --bpsk-freq 100 --bpsk-atten 0 \
-        --qpsk-en 1 --qpsk-freq 200 --qpsk-atten 0
-    python3 send_tx_init.py --dry-run                         # build/print only, do not send
-    
     cd /d %USERPROFILE%\Desktops
-    python send_tx_init.py --ip 192.168.1.10 --bpsk-freq 50 --bpsk-atten 3 --qpsk-en 0
+    python send_tx_init.py --ip 192.168.1.10 --bpsk-en 1 --bpsk-freq 100 --bpsk-atten 0 --bpsk-en 1 --qpsk-en 1 --qpsk-freq 200 --bpsk-atten 0
 """
 
 import argparse
