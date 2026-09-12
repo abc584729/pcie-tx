@@ -1,0 +1,9 @@
+../Core/Src/main.c:103:5:main	1
+../Core/Src/main.c:189:6:SystemClock_Config	3
+../Core/Src/main.c:228:13:MX_GPIO_Init	1
+../Core/Src/main.c:302:6:KeyMonitorTask_init	10
+../Core/Src/main.c:426:6:PowerOnTask_init	5
+../Core/Src/main.c:522:6:HardOffTask_init	4
+../Core/Src/main.c:587:6:SoftOffTask_init	3
+../Core/Src/main.c:634:6:HAL_TIM_PeriodElapsedCallback	2
+../Core/Src/main.c:652:6:Error_Handler	1
