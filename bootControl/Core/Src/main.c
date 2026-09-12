@@ -65,6 +65,17 @@ typedef struct
     uint8_t       stable_cnt;
 } wdt_ctrl_t;
 
+/* System power state, shared between tasks. Every transition is written
+   by the task that owns it. */
+typedef enum
+{
+    PWR_ST_OFF = 0,     /* everything off, waiting for a power-on request */
+    PWR_ST_UP,          /* power-up sequence running */
+    PWR_ST_ON,          /* up and running */
+    PWR_ST_DOWN,        /* power-down sequence running */
+    PWR_ST_FAULT        /* power-up sequence failed */
+} pwr_state_t;
+
 #define KEY_SCAN_TIME_MS      20
 
 #define PWR_SHORT_MS          100
@@ -75,8 +86,15 @@ typedef struct
 #define WDT_TIMEOUT_MS        5000   
 #define WDT_STABLE_CNT        2       
 
-uint8_t is_soft_off_enabled = 0;
-uint8_t is_wdt_detect_enabled = 0;
+/* Power-down sequencing */
+#define HARD_OFF_BTN_MS       4000    /* PWRBTN# hold that forces the x86 off */
+#define HOST_STOP_TIMEOUT_MS  6000    /* max wait for SUS_S3# to drop */
+#define RFSOC_QUIESCE_MS      100     /* let PROG_B settle before cutting power */
+
+/* Written by whichever task owns the transition, read by SoftOffTask on
+   every poll -- volatile because the Release build compiles with -Os. */
+volatile pwr_state_t g_pwr_state = PWR_ST_OFF;
+volatile uint8_t is_wdt_detect_enabled = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -436,6 +454,18 @@ void PowerOnTask_init(void const * argument)
 	  osEvent evt = osSignalWait(0x01, osWaitForever);
 	  if (evt.status == osEventSignal)
 	  {
+		  /* Only a fully powered-off system may be powered up again. A short
+		     press while up / powering up / powering down is dropped: without
+		     this guard the whole sequence re-runs on a live system, and the
+		     1s PWRBTN# pulse further down shuts the running x86 down. */
+		  if (g_pwr_state == PWR_ST_ON ||
+		      g_pwr_state == PWR_ST_UP ||
+		      g_pwr_state == PWR_ST_DOWN)
+		  {
+			  continue;
+		  }
+
+		  g_pwr_state = PWR_ST_UP;
 
 		  /* Enable External Power Supply */
 		  HAL_GPIO_WritePin(GPIOA, RUN_PWR_X86_Pin, GPIO_PIN_SET);
@@ -457,6 +487,11 @@ void PowerOnTask_init(void const * argument)
 
 	  	  /* RFSOC Power good */
 	  	  HAL_GPIO_WritePin(GPIOB, LED1_FRONTPANEL_PWR_Pin, GPIO_PIN_SET);
+
+	  	  /* Release PROG_B first. The power-down sequences assert it to
+	  	     clear the PL, so it has to be de-asserted before the reset is
+	  	     released or the PL stays unconfigured. */
+	  	  HAL_GPIO_WritePin(PS_PROG_B_GPIO_Port, PS_PROG_B_Pin, GPIO_PIN_SET);
 
 	  	  /* Release RFSOC Reset to enable Power On Reset*/
 	  	  HAL_GPIO_WritePin(RESETN_RFSOC_GPIO_Port, RESETN_RFSOC_Pin, GPIO_PIN_SET);
@@ -501,8 +536,8 @@ void PowerOnTask_init(void const * argument)
 //	  	  osDelay(50);
 //	      HAL_GPIO_WritePin(GPIOA, RESET_X86_Pin, GPIO_PIN_RESET);
 
-	  	  /* Enable Soft off */
-	  	  is_soft_off_enabled = 1;
+	  	  /* X86 is up: allow soft-off detection */
+	  	  g_pwr_state = PWR_ST_ON;
 
 		  /* Wait X86 System Boots */
           osDelay(WAIT_SYS_START);
@@ -523,7 +558,6 @@ void HardOffTask_init(void const * argument)
 {
 	/* USER CODE BEGIN PowerDownTask_init */
 	uint16_t wait_time = 0;
-	const uint16_t MAX_WAIT_TIME = 5000;
 
 	/* Infinite loop */
 	for(;;)
@@ -531,31 +565,21 @@ void HardOffTask_init(void const * argument)
 		osEvent evt = osSignalWait(0x03, osWaitForever);
 		if (evt.status == osEventSignal)
 		{
-			/* Disable Soft Power Off && watch dog detection*/
-			is_soft_off_enabled = 0;
-
-			/* Disable watch dog detection*/
+			/* Power-up order is RFSOC then X86, so power-down has to be the
+			   reverse: the x86 stops first, and the RFSOC -- which is the
+			   x86's PCIe endpoint -- is the last thing to lose power. */
+			g_pwr_state = PWR_ST_DOWN;
 			is_wdt_detect_enabled = 0;
 
-			/* Enable RFSOC Power On Reset*/
-			HAL_GPIO_WritePin(RESETN_RFSOC_GPIO_Port, RESETN_RFSOC_Pin, GPIO_PIN_RESET);
-
-			/* Cut RFSOC Power*/
-			HAL_GPIO_WritePin(RUN_PWR_RFSOC_GPIO_Port, RUN_PWR_RFSOC_Pin, GPIO_PIN_RESET);
-
-			/* Disable LED panel lights*/
-			HAL_GPIO_WritePin(GPIOB, LED1_FRONTPANEL_PWR_Pin, GPIO_PIN_RESET);
-			HAL_GPIO_WritePin(GPIOB, LED2_FRONTPANEL_PWR_Pin, GPIO_PIN_RESET);
-			HAL_GPIO_WritePin(GPIOB, LED6_FRONTPANEL_PWR_Pin, GPIO_PIN_RESET);
-
-			/* Push X86 Power Button for 4 seconds */
+			/* Ask the x86 to shut down itself. The RFSOC must stay alive for
+			   the whole of this 4s, otherwise the x86 is left running with an
+			   already dead PCIe endpoint. */
 			HAL_GPIO_WritePin(GPIOA, PWR_BTN_X86_Pin, GPIO_PIN_RESET);
-			osDelay(4000);
+			osDelay(HARD_OFF_BTN_MS);
 			HAL_GPIO_WritePin(GPIOA, PWR_BTN_X86_Pin, GPIO_PIN_SET);
 
 			/* Wait until X86 is ready to be shut down, active low */
-			/* Maximum waiting time 5 second */
-			while(wait_time <= MAX_WAIT_TIME && HAL_GPIO_ReadPin(SUS_S3_GPIO_Port, SUS_S3_Pin) != GPIO_PIN_RESET)
+			while(wait_time <= HOST_STOP_TIMEOUT_MS && HAL_GPIO_ReadPin(SUS_S3_GPIO_Port, SUS_S3_Pin) != GPIO_PIN_RESET)
 			{
 				osDelay(10);
 				wait_time += 10;
@@ -564,14 +588,29 @@ void HardOffTask_init(void const * argument)
 			/* Clear time counter */
 			wait_time = 0;
 
-			/* Reset X86 */
+			/* Hold the x86 in reset as well: if it did not stop within the
+			   timeout above, this at least stops it issuing PCIe traffic. */
 			HAL_GPIO_WritePin(GPIOA, RESET_X86_Pin, GPIO_PIN_RESET);
-			/* Disable X86 PWR OK */
+
+			/* Only now let the PCIe endpoint disappear. Clear the PL first
+			   (PROG_B is active low) so the link goes down cleanly and the GT
+			   lanes are tri-stated, then cut its power. */
+			HAL_GPIO_WritePin(RESETN_RFSOC_GPIO_Port, RESETN_RFSOC_Pin, GPIO_PIN_RESET);
+			HAL_GPIO_WritePin(PS_PROG_B_GPIO_Port, PS_PROG_B_Pin, GPIO_PIN_RESET);
+			osDelay(RFSOC_QUIESCE_MS);
+			HAL_GPIO_WritePin(RUN_PWR_RFSOC_GPIO_Port, RUN_PWR_RFSOC_Pin, GPIO_PIN_RESET);
+
+			/* Disable X86 PWR OK, then cut external power supply */
 			HAL_GPIO_WritePin(GPIOA, PWR_OK_X86_Pin, GPIO_PIN_RESET);
-			/* Cut External Power Supply*/
 			HAL_GPIO_WritePin(RUN_PWR_X86_GPIO_Port, RUN_PWR_X86_Pin, GPIO_PIN_RESET);
+
 			/* Disable LED panel lights*/
+			HAL_GPIO_WritePin(GPIOB, LED1_FRONTPANEL_PWR_Pin, GPIO_PIN_RESET);
+			HAL_GPIO_WritePin(GPIOB, LED2_FRONTPANEL_PWR_Pin, GPIO_PIN_RESET);
 			HAL_GPIO_WritePin(GPIOB, LED3_FRONTPANEL_PWR_Pin, GPIO_PIN_RESET);
+			HAL_GPIO_WritePin(GPIOB, LED6_FRONTPANEL_PWR_Pin, GPIO_PIN_RESET);
+
+			g_pwr_state = PWR_ST_OFF;
 
 		}
 	}
@@ -591,24 +630,22 @@ void SoftOffTask_init(void const * argument)
 	for(;;)
 	{
 		/* Wait for X86 Soft off signal, active low */
-		if(is_soft_off_enabled == 1 && HAL_GPIO_ReadPin(SUS_S3_GPIO_Port, SUS_S3_Pin) == GPIO_PIN_RESET)
+		if(g_pwr_state == PWR_ST_ON && HAL_GPIO_ReadPin(SUS_S3_GPIO_Port, SUS_S3_Pin) == GPIO_PIN_RESET)
 		{
-			/* Disable Soft Power Off && watch dog detection*/
-			is_soft_off_enabled = 0;
-
-			/* Disable watch dog detection*/
+			g_pwr_state = PWR_ST_DOWN;
 			is_wdt_detect_enabled = 0;
 
-			/* Enable RFSOC Power On Reset*/
+			/* The x86 has already stopped on its own. Mirror the power-up
+			   order as in HardOffTask: stop the x86, clear the PL, cut the
+			   RFSOC, then cut the x86. */
+			HAL_GPIO_WritePin(GPIOA, RESET_X86_Pin, GPIO_PIN_RESET);
+			HAL_GPIO_WritePin(GPIOA, PWR_OK_X86_Pin, GPIO_PIN_RESET);
+
 			HAL_GPIO_WritePin(RESETN_RFSOC_GPIO_Port, RESETN_RFSOC_Pin, GPIO_PIN_RESET);
-			/* Cut RFSOC Power*/
+			HAL_GPIO_WritePin(PS_PROG_B_GPIO_Port, PS_PROG_B_Pin, GPIO_PIN_RESET);
+			osDelay(RFSOC_QUIESCE_MS);
 			HAL_GPIO_WritePin(RUN_PWR_RFSOC_GPIO_Port, RUN_PWR_RFSOC_Pin, GPIO_PIN_RESET);
 
-			/* Reset X86 */
-			HAL_GPIO_WritePin(GPIOA, RESET_X86_Pin, GPIO_PIN_RESET);
-			/* Disable X86 PWR OK */
-			HAL_GPIO_WritePin(GPIOA, PWR_OK_X86_Pin, GPIO_PIN_RESET);
-			/* Cut X86 Power*/
 			HAL_GPIO_WritePin(RUN_PWR_X86_GPIO_Port, RUN_PWR_X86_Pin, GPIO_PIN_RESET);
 
 			/* Cut LED panel lights*/
@@ -617,6 +654,7 @@ void SoftOffTask_init(void const * argument)
 			HAL_GPIO_WritePin(GPIOB, LED3_FRONTPANEL_PWR_Pin, GPIO_PIN_RESET);
 			HAL_GPIO_WritePin(GPIOB, LED6_FRONTPANEL_PWR_Pin, GPIO_PIN_RESET);
 
+			g_pwr_state = PWR_ST_OFF;
 		}
 		osDelay(100);
 	}
