@@ -91,10 +91,38 @@ typedef enum
 #define HOST_STOP_TIMEOUT_MS  6000    /* max wait for SUS_S3# to drop */
 #define RFSOC_QUIESCE_MS      100     /* let PROG_B settle before cutting power */
 
+#define WAIT_PIN_POLL_MS       10     /* poll period for every pin handshake */
+#define FAULT_BLINK_MS        250     /* half period of the FAULT indicator */
+
+/* Handshake timeouts. These are STARTING POINTS, not measured values: each
+   one has to be confirmed against the real board before they can be
+   trusted. See the notes in the plan for how to measure each of them. */
+#define RFSOC_DISCHARGE_MS    10000   /* power-down: PWRGOOD_RFSOC high -> low */
+#define PRECOND_TIMEOUT_MS     3000   /* power-up backstop, unclean start only */
+#define PSU_SETTLE_MS         10000   /* RUN_PWR_X86 high -> PWRGOOD_RFSOC high */
+#define RFSOC_RESET_HOLD_MS     200   /* Zynq PS POR minimum pulse width */
+#define RFSOC_BOOT_TIMEOUT_MS 30000   /* RESETN_RFSOC release -> PS_DONE high */
+#define HOST_S5_TIMEOUT_MS      500   /* power-up: is the module sitting in S5? */
+#define HOST_S0_TIMEOUT_MS    15000   /* PWRBTN# press -> SUS_S3# high */
+
+/* Stage numbers for g_last_fail_step. Watch it in the debugger to find out
+   which handshake gave up. */
+#define STEP_PRECOND              1
+#define STEP_RFSOC_PWRGOOD        2
+#define STEP_RFSOC_PSDONE         3
+#define STEP_HOST_S5              4
+#define STEP_HOST_S0              5
+
 /* Written by whichever task owns the transition, read by SoftOffTask on
    every poll -- volatile because the Release build compiles with -Os. */
 volatile pwr_state_t g_pwr_state = PWR_ST_OFF;
 volatile uint8_t is_wdt_detect_enabled = 0;
+
+/* Set when a power-down could not confirm that the RFSoC rail had
+   discharged. The next power-up then checks the preconditions instead of
+   trusting that the handshake signals start from their inactive level. */
+volatile uint8_t g_pwr_unclean = 0;
+volatile uint8_t g_last_fail_step = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -107,10 +135,51 @@ void SoftOffTask_init(void const * argument);
 
 /* USER CODE BEGIN PFP */
 
+static uint8_t wait_pin_level(GPIO_TypeDef *port, uint16_t pin,
+                              GPIO_PinState want, uint32_t timeout_ms);
+static uint8_t wait_pin_high(GPIO_TypeDef *port, uint16_t pin, uint32_t timeout_ms);
+static uint8_t wait_pin_low(GPIO_TypeDef *port, uint16_t pin, uint32_t timeout_ms);
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+/**
+  * @brief  Poll a pin until it reaches a level, giving up after a timeout.
+  * @retval 1 = the level was reached, 0 = timed out.
+  *
+  * A timed-out handshake is never something to spin on: the caller decides
+  * what a timeout means. The RFSoC-side stages treat it as a fault and stop
+  * the sequence; the two SUS_S3# checks only record it, because whether that
+  * signal is readable on this board has not been measured yet.
+  */
+static uint8_t wait_pin_level(GPIO_TypeDef *port, uint16_t pin,
+                              GPIO_PinState want, uint32_t timeout_ms)
+{
+	uint32_t waited = 0;
+
+	while (HAL_GPIO_ReadPin(port, pin) != want)
+	{
+		if (waited >= timeout_ms)
+		{
+			return 0;
+		}
+		osDelay(WAIT_PIN_POLL_MS);
+		waited += WAIT_PIN_POLL_MS;
+	}
+	return 1;
+}
+
+static uint8_t wait_pin_high(GPIO_TypeDef *port, uint16_t pin, uint32_t timeout_ms)
+{
+	return wait_pin_level(port, pin, GPIO_PIN_SET, timeout_ms);
+}
+
+static uint8_t wait_pin_low(GPIO_TypeDef *port, uint16_t pin, uint32_t timeout_ms)
+{
+	return wait_pin_level(port, pin, GPIO_PIN_RESET, timeout_ms);
+}
 
 /* USER CODE END 0 */
 
@@ -448,10 +517,25 @@ void PowerOnTask_init(void const * argument)
   uint32_t BTN_PRESS_TIME = 1000;
   //uint32_t WAIT_EXTERNAL_POWER_ON = 5000;
   uint32_t WAIT_SYS_START = 10000;
+  uint8_t fault_blink = 0;
   /* Infinite loop */
   for(;;)
   {
-	  osEvent evt = osSignalWait(0x01, osWaitForever);
+	  osEvent evt;
+	  uint32_t wait_ms;
+
+	  /* In FAULT the wait is finite so the panel LED can blink the fault
+	     code; the rest of the time block until a key event arrives. */
+	  wait_ms = (g_pwr_state == PWR_ST_FAULT) ? FAULT_BLINK_MS : osWaitForever;
+	  evt = osSignalWait(0x01, wait_ms);
+
+	  if (g_pwr_state == PWR_ST_FAULT)
+	  {
+		  fault_blink ^= 1;
+		  HAL_GPIO_WritePin(GPIOB, LED4_FRONTPANEL_PWR_Pin,
+		                    fault_blink ? GPIO_PIN_SET : GPIO_PIN_RESET);
+	  }
+
 	  if (evt.status == osEventSignal)
 	  {
 		  /* Only a fully powered-off system may be powered up again. A short
@@ -465,28 +549,60 @@ void PowerOnTask_init(void const * argument)
 			  continue;
 		  }
 
+		  g_last_fail_step = 0;
+		  HAL_GPIO_WritePin(GPIOB, LED4_FRONTPANEL_PWR_Pin, GPIO_PIN_RESET);
 		  g_pwr_state = PWR_ST_UP;
+
+		  /* The first step is not "apply power", it is "hold every
+		     downstream device in reset", so nothing comes up half
+		     configured while the rails are still ramping. */
+		  HAL_GPIO_WritePin(GPIOA, RESET_X86_Pin, GPIO_PIN_RESET);
+		  HAL_GPIO_WritePin(GPIOA, PWR_OK_X86_Pin, GPIO_PIN_RESET);
+		  HAL_GPIO_WritePin(PS_PROG_B_GPIO_Port, PS_PROG_B_Pin, GPIO_PIN_RESET);
+		  HAL_GPIO_WritePin(RESETN_RFSOC_GPIO_Port, RESETN_RFSOC_Pin, GPIO_PIN_RESET);
+
+		  /* Backstop for a power-down that could not confirm the rails had
+		     discharged. Normally g_pwr_unclean is 0 and this costs nothing:
+		     the power-down paths already waited the discharge out while
+		     nobody was watching. Only when that failed do we refuse to
+		     trust the handshake signals here. */
+		  if (g_pwr_unclean != 0)
+		  {
+			  if (wait_pin_low(PWRGOOD_RFSOC_GPIO_Port, PWRGOOD_RFSOC_Pin, PRECOND_TIMEOUT_MS) == 0 ||
+			      wait_pin_low(PS_DONE_GPIO_Port, PS_DONE_Pin, PRECOND_TIMEOUT_MS) == 0)
+			  {
+				  g_last_fail_step = STEP_PRECOND;
+				  goto power_fail;
+			  }
+			  g_pwr_unclean = 0;
+		  }
 
 		  /* Enable External Power Supply */
 		  HAL_GPIO_WritePin(GPIOA, RUN_PWR_X86_Pin, GPIO_PIN_SET);
-
-		  /* Wait for 1 second ???*/
-		  //osDelay(WAIT_EXTERNAL_POWER_ON);
-
-		  HAL_GPIO_WritePin(GPIOA, RESET_X86_Pin, GPIO_PIN_SET);
 
 	  	  /* Entering RFSOC Power up sequence */
 	  	  /* Power RFSOC */
 	  	  HAL_GPIO_WritePin(RUN_PWR_RFSOC_GPIO_Port, RUN_PWR_RFSOC_Pin, GPIO_PIN_SET);
 
-	  	  /* Wait until RFSOC Power good */
-	  	  while(HAL_GPIO_ReadPin(PWRGOOD_RFSOC_GPIO_Port, PWRGOOD_RFSOC_Pin) != GPIO_PIN_SET)
+	  	  /* Wait until RFSOC Power good. This doubles as the PSU ramp wait:
+	  	     RUN_PWR_X86 was raised two writes ago with nothing in between,
+	  	     so a cold start relies on this loop to cover the ramp. It is
+	  	     trustworthy here because the rail is guaranteed to have been
+	  	     left discharged -- see g_pwr_unclean above. */
+	  	  if (wait_pin_high(PWRGOOD_RFSOC_GPIO_Port, PWRGOOD_RFSOC_Pin, PSU_SETTLE_MS) == 0)
 	  	  {
-	  		    osDelay(1);
+	  		  g_last_fail_step = STEP_RFSOC_PWRGOOD;
+	  		  goto power_fail;
 	  	  }
 
 	  	  /* RFSOC Power good */
 	  	  HAL_GPIO_WritePin(GPIOB, LED1_FRONTPANEL_PWR_Pin, GPIO_PIN_SET);
+
+	  	  /* Hold the reset for a known minimum before releasing it. This is
+	  	     what turns "release the reset and hope" into a deterministic
+	  	     POR pulse, so that PS_DONE going high below is a real 0->1 edge
+	  	     rather than a level that was left over from the last session. */
+	  	  osDelay(RFSOC_RESET_HOLD_MS);
 
 	  	  /* Release PROG_B first. The power-down sequences assert it to
 	  	     clear the PL, so it has to be de-asserted before the reset is
@@ -497,9 +613,10 @@ void PowerOnTask_init(void const * argument)
 	  	  HAL_GPIO_WritePin(RESETN_RFSOC_GPIO_Port, RESETN_RFSOC_Pin, GPIO_PIN_SET);
 
 	  	  /* Wait until PS Done */
-	  	  while(HAL_GPIO_ReadPin(PS_DONE_GPIO_Port, PS_DONE_Pin) != GPIO_PIN_SET)
+	  	  if (wait_pin_high(PS_DONE_GPIO_Port, PS_DONE_Pin, RFSOC_BOOT_TIMEOUT_MS) == 0)
 	  	  {
-	  		    osDelay(100);
+	  		  g_last_fail_step = STEP_RFSOC_PSDONE;
+	  		  goto power_fail;
 	  	  }
 
 	  	  /* When PS DONE, Turn on LED 6 */
@@ -510,15 +627,33 @@ void PowerOnTask_init(void const * argument)
 
 
 	  	  /* Entering X86 Power up sequence */
+	  	  /* The module has to be in S5 before the button is pressed. Without
+	  	     this, a SUS_S3# left high by the previous session makes the
+	  	     wait below pass instantly and PWR_OK_X86 gets asserted before
+	  	     the module is actually up. */
+	  	  if (wait_pin_low(GPIOA, SUS_S3_Pin, HOST_S5_TIMEOUT_MS) == 0)
+	  	  {
+	  		  /* Warning only, deliberately not fatal. If SUS_S3# cannot be
+	  		     read at all on this board -- GPIO_NOPULL on a net whose
+	  		     driver is unpowered -- then failing here would break the
+	  		     cold boot that works today. Record the stage and carry on
+	  		     the way the old code did; watch g_last_fail_step to find
+	  		     out which of the two it actually is. */
+	  		  g_last_fail_step = STEP_HOST_S5;
+	  	  }
+
 	  	  /* Push X86 Power Button for 1s*/
 	  	  HAL_GPIO_WritePin(GPIOA, PWR_BTN_X86_Pin, GPIO_PIN_RESET);
 	  	  osDelay(BTN_PRESS_TIME);
 	  	  HAL_GPIO_WritePin(GPIOA, PWR_BTN_X86_Pin, GPIO_PIN_SET);
 
 	  	  /* Wait until SUS_S3_Pin is released */
-	  	  while(HAL_GPIO_ReadPin(GPIOA, SUS_S3_Pin) != GPIO_PIN_SET)
+	  	  if (wait_pin_high(GPIOA, SUS_S3_Pin, HOST_S0_TIMEOUT_MS) == 0)
 	  	  {
-	  		  osDelay(10);
+	  		  /* Warning only, same reasoning as the S5 check above. The x86
+	  		     side is the one that does not lock the system out today, so
+	  		     it keeps that behaviour until the signal is measured. */
+	  		  g_last_fail_step = STEP_HOST_S0;
 	  	  }
 
 	  	  /* Send Power OK Signal to X86 */
@@ -544,7 +679,30 @@ void PowerOnTask_init(void const * argument)
 
           /* Enable WDT detection */
           is_wdt_detect_enabled = 1;
+		  continue;
 	  }
+
+	  continue;
+
+power_fail:
+	  /* A power-up stage was not reached in time. Do NOT leave the system
+	     half powered: an x86 that POSTs against a PL that never got
+	     configured is exactly the "screen comes up, then it hangs"
+	     failure this sequence has to avoid. Cut everything and park in
+	     FAULT with the front panel LED off; the next press retries. */
+	  HAL_GPIO_WritePin(GPIOA, PWR_OK_X86_Pin, GPIO_PIN_RESET);
+	  HAL_GPIO_WritePin(GPIOA, RESET_X86_Pin, GPIO_PIN_RESET);
+	  HAL_GPIO_WritePin(GPIOA, RUN_PWR_X86_Pin, GPIO_PIN_RESET);
+	  HAL_GPIO_WritePin(PS_PROG_B_GPIO_Port, PS_PROG_B_Pin, GPIO_PIN_RESET);
+	  HAL_GPIO_WritePin(RESETN_RFSOC_GPIO_Port, RESETN_RFSOC_Pin, GPIO_PIN_RESET);
+	  HAL_GPIO_WritePin(RUN_PWR_RFSOC_GPIO_Port, RUN_PWR_RFSOC_Pin, GPIO_PIN_RESET);
+
+	  HAL_GPIO_WritePin(GPIOB, LED1_FRONTPANEL_PWR_Pin, GPIO_PIN_RESET);
+	  HAL_GPIO_WritePin(GPIOB, LED3_FRONTPANEL_PWR_Pin, GPIO_PIN_RESET);
+	  HAL_GPIO_WritePin(GPIOB, LED6_FRONTPANEL_PWR_Pin, GPIO_PIN_RESET);
+
+	  is_wdt_detect_enabled = 0;
+	  g_pwr_state = PWR_ST_FAULT;
   }
 }
 /* USER CODE BEGIN Header_HardOffTask_init */
@@ -610,6 +768,17 @@ void HardOffTask_init(void const * argument)
 			HAL_GPIO_WritePin(GPIOB, LED3_FRONTPANEL_PWR_Pin, GPIO_PIN_RESET);
 			HAL_GPIO_WritePin(GPIOB, LED6_FRONTPANEL_PWR_Pin, GPIO_PIN_RESET);
 
+			/* Now wait for the rail to actually collapse before calling it
+			   OFF. This wait is free -- the machine is already off and
+			   nobody is waiting on it -- and it is what lets the next
+			   power-up trust that PWRGOOD_RFSOC starts from low. If the rail
+			   does not collapse we remember it and the next power-up checks
+			   the preconditions instead of trusting the signal. */
+			if (wait_pin_low(PWRGOOD_RFSOC_GPIO_Port, PWRGOOD_RFSOC_Pin, RFSOC_DISCHARGE_MS) == 0)
+			{
+				g_pwr_unclean = 1;
+			}
+
 			g_pwr_state = PWR_ST_OFF;
 
 		}
@@ -653,6 +822,12 @@ void SoftOffTask_init(void const * argument)
 			HAL_GPIO_WritePin(GPIOB, LED2_FRONTPANEL_PWR_Pin, GPIO_PIN_RESET);
 			HAL_GPIO_WritePin(GPIOB, LED3_FRONTPANEL_PWR_Pin, GPIO_PIN_RESET);
 			HAL_GPIO_WritePin(GPIOB, LED6_FRONTPANEL_PWR_Pin, GPIO_PIN_RESET);
+
+			/* Same discharge wait as in HardOffTask: see the comment there. */
+			if (wait_pin_low(PWRGOOD_RFSOC_GPIO_Port, PWRGOOD_RFSOC_Pin, RFSOC_DISCHARGE_MS) == 0)
+			{
+				g_pwr_unclean = 1;
+			}
 
 			g_pwr_state = PWR_ST_OFF;
 		}
