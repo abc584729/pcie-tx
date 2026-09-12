@@ -87,8 +87,10 @@ typedef enum
 #define WDT_STABLE_CNT        2       
 
 /* Power-down sequencing */
+#define PWRBTN_GRACEFUL_MS       300  /* short PWRBTN# pulse: ask the OS to stop */
+#define GRACEFUL_STOP_TIMEOUT_MS 20000 /* max wait for the OS to shut down by itself */
 #define HARD_OFF_BTN_MS       4000    /* PWRBTN# hold that forces the x86 off */
-#define HOST_STOP_TIMEOUT_MS  6000    /* max wait for SUS_S3# to drop */
+#define HOST_STOP_TIMEOUT_MS  6000    /* max wait for SUS_S3# after the forced hold */
 #define RFSOC_QUIESCE_MS      100     /* let PROG_B settle before cutting power */
 
 #define WAIT_PIN_POLL_MS       10     /* poll period for every pin handshake */
@@ -715,8 +717,6 @@ power_fail:
 void HardOffTask_init(void const * argument)
 {
 	/* USER CODE BEGIN PowerDownTask_init */
-	uint16_t wait_time = 0;
-
 	/* Infinite loop */
 	for(;;)
 	{
@@ -729,22 +729,32 @@ void HardOffTask_init(void const * argument)
 			g_pwr_state = PWR_ST_DOWN;
 			is_wdt_detect_enabled = 0;
 
-			/* Ask the x86 to shut down itself. The RFSOC must stay alive for
-			   the whole of this 4s, otherwise the x86 is left running with an
-			   already dead PCIe endpoint. */
+			/* Ask the x86 to shut down the polite way first. A short PWRBTN#
+			   pulse is a normal power-button event, and the OS answers it with
+			   a clean shutdown. Holding the button instead crosses the ATX
+			   forced-off threshold (>= 4s), which cuts the rail while the OS is
+			   still shutting down -- a guaranteed unclean stop, and that is what
+			   leaves the next boot hanging at the desktop.
+			   The RFSOC must stay alive for the whole of this, otherwise the x86
+			   is left running with an already dead PCIe endpoint. */
 			HAL_GPIO_WritePin(GPIOA, PWR_BTN_X86_Pin, GPIO_PIN_RESET);
-			osDelay(HARD_OFF_BTN_MS);
+			osDelay(PWRBTN_GRACEFUL_MS);
 			HAL_GPIO_WritePin(GPIOA, PWR_BTN_X86_Pin, GPIO_PIN_SET);
 
-			/* Wait until X86 is ready to be shut down, active low */
-			while(wait_time <= HOST_STOP_TIMEOUT_MS && HAL_GPIO_ReadPin(SUS_S3_GPIO_Port, SUS_S3_Pin) != GPIO_PIN_RESET)
+			/* SUS_S3# dropping is the module telling us it is in S5, i.e. the
+			   OS finished shutting down on its own. */
+			if (wait_pin_low(SUS_S3_GPIO_Port, SUS_S3_Pin, GRACEFUL_STOP_TIMEOUT_MS) == 0)
 			{
-				osDelay(10);
-				wait_time += 10;
-			}
+				   /* No answer: the OS is hung. Only now fall back to the 4s hold,
+				      which is the ATX override that cuts the power whatever the OS
+				      is doing. */
+				HAL_GPIO_WritePin(GPIOA, PWR_BTN_X86_Pin, GPIO_PIN_RESET);
+				osDelay(HARD_OFF_BTN_MS);
+				HAL_GPIO_WritePin(GPIOA, PWR_BTN_X86_Pin, GPIO_PIN_SET);
 
-			/* Clear time counter */
-			wait_time = 0;
+				/* Wait until X86 is ready to be shut down, active low */
+				wait_pin_low(SUS_S3_GPIO_Port, SUS_S3_Pin, HOST_STOP_TIMEOUT_MS);
+			}
 
 			/* Hold the x86 in reset as well: if it did not stop within the
 			   timeout above, this at least stops it issuing PCIe traffic. */
