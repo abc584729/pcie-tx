@@ -4,17 +4,69 @@
 
 ```
 pcie-tx/
-├── sys.slx                  # Simulink 顶层模型
-├── filter/                  # 滤波器设计文件（.fda）
-│   ├── rcos_filter.fda              # 升余弦成形滤波器
-│   ├── anti_imaging_filter_5.fda    # 5 倍内插抗镜像滤波器
-│   ├── anti_imaging_filter_8.fda    # 8 倍内插抗镜像滤波器（多相）
-│   ├── anti_imaging_filter_10.fda   # 10 倍内插抗镜像滤波器
-│   ├── anti_aliasing_filter_5.fda   # 5 倍抽取抗混叠滤波器
-│   ├── anti_aliasing_filter_8.fda   # 8 倍抽取抗混叠滤波器（多相）
-│   └── anti_aliasing_filter_10.fda  # 10 倍抽取抗混叠滤波器
+├── README.md                            # 说明文档
+├── simulator_transceiver_sync_V6.pdf    # 电路版图
+│
+├── rtl/                                 # 发射链路 Verilog RTL
+│   ├── tx_top.v                         # 发射链路顶层
+│   ├── bpsk.v / qpsk.v                  # BPSK / QPSK 调制
+│   ├── bpsk_mapper.v / bpsk_ram.v       # BPSK 符号映射、符号表 RAM
+│   ├── qpsk_mapper.v / qpsk_ram.v       # QPSK 符号映射、符号表 RAM
+│   ├── rcos_filter.v                    # 升余弦成形滤波器（另有 _iq 双路版本）
+│   ├── anti_imaging_filter_5.v          # 5 倍内插抗镜像滤波器（另有 _iq 版本）
+│   ├── anti_imaging_filter_8_par.v      # 8 倍内插抗镜像滤波器，多相并行（另有 _iq 版本）
+│   ├── anti_imaging_filter_10.v         # 10 倍内插抗镜像滤波器
+│   ├── zero_interpolator.v              # 零值内插
+│   ├── dds_x8.v                         # 8 路并行 DDS，频谱搬移至中频
+│   ├── digital_attenuator.v             # 数字衰减器（另有 _iq 双路版本）
+│   ├── add.v                            # 8 通道 I/Q 数据逐通道求和
+│   └── dpram.v                          # 双口 RAM
+│
+├── tb/
+│   └── tb_tx.v                          # 发射链路仿真 testbench
+├── tcl/
+│   ├── ila.tcl                          # ILA 调试脚本
+│   └── vio.tcl                          # VIO 调试脚本
+├── mem/
+│   └── ram.mem                          # 符号表 RAM 初始化文件
+│
+├── ps/                                  # Zynq PS 侧接口、驱动与配置
+│   ├── top.vhd                          # PS 侧顶层
+│   ├── ps_interface_1.vhd               # PS 接口
+│   ├── arm_interface_write_1.vhd        # ARM 写接口
+│   ├── pcie_tx.h                        # 发射系统寄存器地址定义（0x700 起）
+│   ├── pcie_tx.c                        # 中频频点配置与发射初始化
+│   ├── adhocSoft.c                      # 自组网协议栈（UDP 控制命令 case 133）
+│   ├── Si5340_Data.h                    # Si5341 时钟芯片配置寄存器表
+│   └── send_tx_init.py                  # 上位机发送 UDP 初始化命令包脚本
+│
+├── matlab/                              # Simulink 模型与滤波器设计
+│   ├── bpsk.slx / qpsk.slx              # BPSK / QPSK 链路模型
+│   ├── simulink_analysis.m              # Simulink 仿真分析
+│   ├── spectrum_analysis.m              # 频谱分析
+│   ├── vivado_analysis.m                # Vivado 结果分析
+│   ├── result.csv / sim.mat             # 仿真数据
+│   ├── filter/                          # 滤波器设计文件（.fda）
+│   │   ├── rcos_filter.fda              # 升余弦成形滤波器
+│   │   ├── anti_imaging_filter_5.fda    # 5 倍内插抗镜像滤波器
+│   │   ├── anti_imaging_filter_8.fda    # 8 倍内插抗镜像滤波器（多相）
+│   │   ├── anti_imaging_filter_10.fda   # 10 倍内插抗镜像滤波器
+│   │   ├── anti_aliasing_filter_5.fda   # 5 倍抽取抗混叠滤波器
+│   │   ├── anti_aliasing_filter_8.fda   # 8 倍抽取抗混叠滤波器（多相）
+│   │   └── anti_aliasing_filter_10.fda  # 10 倍抽取抗混叠滤波器
+│   └── hdlsrc/                          # HDL Coder 生成的滤波器 RTL
+│       ├── rcos_filter/                 # 每个滤波器一套：生成代码 + testbench + 编译脚本
+│       ├── anti_imaging_filter_5/
+│       ├── anti_imaging_filter_8/
+│       └── anti_imaging_filter_10/
+│
+├── bootControl/                         # STM32F103 上电时序控制（STM32CubeIDE 工程）
+│   ├── Core/                            # 主程序与外设初始化
+│   ├── Drivers/                         # HAL 库与 CMSIS
+│   ├── Middlewares/                     # FreeRTOS
+│   └── gg.ioc                           # CubeMX 配置
 └── imags/
-    └── system-design.jpg    # 系统设计框图
+    └── system-design.jpg                # 系统设计框图
 ```
 
 ## 一、项目源起
@@ -83,3 +135,25 @@ pcie-tx/
 |------|------|------|
 | 通带 | — | π/32 |
 | 阻带 | (2 − 5π/32) / 5 | 59π/160 |
+
+## 3、新要求
+
+### 3.1 修改ram大小
+
+老张要求把ram大小改成能让bpsk 450k速率至少发送1s
+
+### 3.2 新增一对速率
+
+bpsk：400k
+
+qpsk：6.857m
+
+设计：
+
+180m / 450k = 400 = 8 * 5 * 10 
+
+180m / 400k = 450 = 9 * 5 * 10	（即改为9倍成形滤波）
+
+180m / 4.5m = 40 = 8 * 5
+
+180m / 6.857m ~= 26 = 13* 2	（即改为13倍成形滤波加2倍上采样，实际速率6.923）
