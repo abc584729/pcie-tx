@@ -356,10 +356,10 @@ signal		dds_poff_qpsk_ps :   STD_LOGIC_VECTOR(127 downto 0);
 signal		atten_bpsk_ps :   STD_LOGIC_VECTOR(15 downto 0);
 signal		atten_qpsk_ps :   STD_LOGIC_VECTOR(15 downto 0);
 signal		ram_w_en_bpsk_ps    :   STD_LOGIC;
-signal		ram_w_addr_bpsk_ps  :   STD_LOGIC_VECTOR(4 downto 0);
+signal		ram_w_addr_bpsk_ps  :   STD_LOGIC_VECTOR(14 downto 0);
 signal		ram_w_data_bpsk_ps  :   STD_LOGIC_VECTOR(15 downto 0);
 signal		ram_w_en_qpsk_ps    :   STD_LOGIC;
-signal		ram_w_addr_qpsk_ps  :   STD_LOGIC_VECTOR(4 downto 0);
+signal		ram_w_addr_qpsk_ps  :   STD_LOGIC_VECTOR(14 downto 0);
 signal		ram_w_data_qpsk_ps  :   STD_LOGIC_VECTOR(15 downto 0);
 
 -- vio/ps 选择信号（0:使用 vio_tx，1:使用 PS）
@@ -413,10 +413,10 @@ COMPONENT tx_top
     atten_bpsk : in STD_LOGIC_VECTOR(15 DOWNTO 0);
     atten_qpsk : in STD_LOGIC_VECTOR(15 DOWNTO 0);
     ram_w_en_bpsk   : in STD_LOGIC;
-    ram_w_addr_bpsk : in STD_LOGIC_VECTOR(4 DOWNTO 0);
+    ram_w_addr_bpsk : in STD_LOGIC_VECTOR(14 DOWNTO 0);
     ram_w_data_bpsk : in STD_LOGIC_VECTOR(15 DOWNTO 0);
     ram_w_en_qpsk   : in STD_LOGIC;
-    ram_w_addr_qpsk : in STD_LOGIC_VECTOR(4 DOWNTO 0);
+    ram_w_addr_qpsk : in STD_LOGIC_VECTOR(14 DOWNTO 0);
     ram_w_data_qpsk : in STD_LOGIC_VECTOR(15 DOWNTO 0);
     iq: OUT STD_LOGIC_VECTOR(255 DOWNTO 0)
   );
@@ -1316,10 +1316,10 @@ component ps_interface_1 is
         atten_bpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
         atten_qpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
         ram_w_en_bpsk_ps    : out STD_LOGIC;
-        ram_w_addr_bpsk_ps  : out STD_LOGIC_VECTOR(4 downto 0);
+        ram_w_addr_bpsk_ps  : out STD_LOGIC_VECTOR(14 downto 0);
         ram_w_data_bpsk_ps  : out STD_LOGIC_VECTOR(15 downto 0);
         ram_w_en_qpsk_ps    : out STD_LOGIC;
-        ram_w_addr_qpsk_ps  : out STD_LOGIC_VECTOR(4 downto 0);
+        ram_w_addr_qpsk_ps  : out STD_LOGIC_VECTOR(14 downto 0);
         ram_w_data_qpsk_ps  : out STD_LOGIC_VECTOR(15 downto 0)
   );
 end component;

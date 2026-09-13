@@ -9,17 +9,19 @@
 // Project Name: 
 // Target Devices: 
 // Tool Versions: 
-// Description: 
-//   Asymmetric dual-port RAM: 16-bit write / 1-bit read.
-//   Single clock (sync), 32 words x 16 bits = 512 bits.
-//   Preloaded from mem/ram.mem ($readmemb), so it can be read directly
-//   without any writes. Path is relative to the simulation run directory
-//   (run iverilog/vvp from rtl/ so "mem/ram.mem" resolves).
-//   Read port is bit-addressable, LSB-first: r_addr = word*16 + bit.
+// Description:
+//   Asymmetric dual-port RAM: 16-bit write / READ_WIDTH-bit read.
+//   Single clock (sync). DEPTH words x 16 bits - the size is set by the
+//   instantiation (bpsk_ram / qpsk_ram use 32768 x 16 = 512 Kbit).
+//   The contents are written entirely through the write port; there is no
+//   preload, so the PS must fill the whole table before the reader is
+//   enabled (tx_init() does this with TX_REG_RAM_EN held at 0).
+//   Read port is bit-addressable, LSB-first:
+//   r_addr = word*(16/READ_WIDTH) + group index.
 //   Reading and writing the same address on the same clock returns the
 //   old value (read-first).
-// 
-// Dependencies: mem/ram.mem
+//
+// Dependencies: none
 // 
 // Revision:
 // Revision 0.01 - File Created
@@ -57,10 +59,6 @@ module dpram #(
     endfunction
 
     reg [15:0] mem [0:DEPTH-1];
-
-    initial begin
-        $readmemb("ram.mem", mem);   // preload; no writes needed to read
-    end
 
     // write port
     always @(posedge clk) begin

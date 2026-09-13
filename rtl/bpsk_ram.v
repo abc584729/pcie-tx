@@ -24,7 +24,7 @@ module bpsk_ram(
     input clk, rst_n,
     input rd_en,             
     input w_en,                
-    input [4:0] w_addr,
+    input [14:0] w_addr,
     input [15:0] w_data,
     output rdata,             
     output rdata_valid
@@ -46,17 +46,17 @@ module bpsk_ram(
     wire flag = rd_en && (count == COUNT_MAX-1);
 
     // ¶ÁÖ¸Õë
-    reg [8:0] rptr;
+    reg [18:0] rptr;
     always @(posedge clk or negedge rst_n) begin
         if(!rst_n) rptr <= 0;
         else if(flag) begin
-            if(rptr == 9'd511) rptr <= 0;
+            if(rptr == 19'd524287) rptr <= 0;
             else rptr <= rptr + 1;
         end
     end
 
-    //Ë«¿Úram£º32*16 = 512*1
-    dpram #(.DEPTH(32), .WADDR(5), .RADDR(9)) u_dpram(
+    //Ë«¿Úram£º32768*16 = 524288*1
+    dpram #(.DEPTH(32768), .WADDR(15), .READ_WIDTH(1), .RADDR(19)) u_dpram(
         .clk           (clk),
         .rst_n         (rst_n),
         .w_en          (w_en),

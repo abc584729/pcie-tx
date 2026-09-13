@@ -149,11 +149,7 @@ void tx_init(void)
     /* 衰减取 //20260902 case133 配置的全局量，默认 0dB */
     set_attenuation_bpsk(atten_bpsk);    /* bpsk 数字衰减 */
     set_attenuation_qpsk(atten_qpsk);    /* qpsk 数字衰减 */
-
-    /* 符号表 RAM 初始化 */
-    write_bpsk_ram(ram_init_data, RAM_INIT_LEN);
-    write_qpsk_ram(ram_init_data, RAM_INIT_LEN);
-
+    
     emc_write(TX_REG_RESET, 1);     /* 解除 tx 复位 */
     emc_write(TX_REG_BPSK_ENABLE, ctrl_bpsk);  /* bpsk 使能 */
     emc_write(TX_REG_QPSK_ENABLE, ctrl_qpsk);  /* qpsk 使能 */

@@ -27,8 +27,6 @@ pcie-tx/
 ├── tcl/
 │   ├── ila.tcl                          # ILA 调试脚本
 │   └── vio.tcl                          # VIO 调试脚本
-├── mem/
-│   └── ram.mem                          # 符号表 RAM 初始化文件
 │
 ├── ps/                                  # Zynq PS 侧接口、驱动与配置
 │   ├── top.vhd                          # PS 侧顶层
@@ -36,9 +34,11 @@ pcie-tx/
 │   ├── arm_interface_write_1.vhd        # ARM 写接口
 │   ├── pcie_tx.h                        # 发射系统寄存器地址定义（0x700 起）
 │   ├── pcie_tx.c                        # 中频频点配置与发射初始化
-│   ├── adhocSoft.c                      # 自组网协议栈（UDP 控制命令 case 133）
+│   ├── adhocSoft.c                      # 自组网协议栈（UDP 控制命令 case 133/134）
 │   ├── Si5340_Data.h                    # Si5341 时钟芯片配置寄存器表
-│   └── send_tx_init.py                  # 上位机发送 UDP 初始化命令包脚本
+│   ├── send_tx_init.py                  # 上位机 UDP 初始化命令（case 133）
+│   ├── send_symbol_table.py             # 符号表分片上传（case 134，64 包）
+│   └── gen_symbol_table.py              # 生成随机符号表文件（.bin）
 │
 ├── matlab/                              # Simulink 模型与滤波器设计
 │   ├── bpsk.slx / qpsk.slx              # BPSK / QPSK 链路模型
@@ -140,9 +140,62 @@ pcie-tx/
 
 ### 3.1 修改 RAM 大小
 
-老张要求把符号表 RAM 加大，使 BPSK 在 450k 速率下至少能连续发送 1 s。
+老张要求 BPSK 在 450k 速率下至少连续发 1 s。450k × 1 s 向上取到 2 的幂 = 2^19 = 524288
+个符号，BPSK 每符号 1 bit，即 **512 Kbit** = 32768 字 × 16 bit（原 32 字 × 16 bit，
+见 `rtl/bpsk_ram.v`）。改后 BPSK 连发 **1.165 s**；QPSK 每符号 2 bit，共 262144 个
+符号，4.5m 下 58.2 ms。
 
-450k × 1 s = 450k 个符号，即深度至少需要 450k 个符号（现为 512 个，见 `rtl/bpsk_ram.v`）。
+表内容不再固化、也不由板上生成，改为**上位机经网口写入**（`rtl/dpram.v` 删去
+`$readmemb` 预载，`mem/ram.mem` 已删除）。
+
+#### 表数据的来源：网口上传
+
+**配置 RAM 和初始化发射是解耦的，顺序是先灌表、后初始化：**
+
+```bash
+python gen_symbol_table.py -o symbols.bin                          # 1. 生成随机表
+python send_symbol_table.py --table symbols.bin --table-sel bpsk   # 2. 灌 BPSK 表
+python send_symbol_table.py --table symbols.bin --table-sel qpsk   #    灌 QPSK 表
+python send_tx_init.py --bpsk-freq 100 --qpsk-freq 200             # 3. 开播
+```
+
+| 脚本 | 干什么 |
+|------|--------|
+| `ps/gen_symbol_table.py` | 生成随机符号表文件（`.bin`，32768 字，种子可复现） |
+| `ps/send_symbol_table.py` | 发 case 134：整表分 **64 包**（每包 512 字 = 1028 字节）；`--table-sel` 必填，一次一张 |
+| `ps/send_tx_init.py` | 发 case 133：频点 / 衰减 / 使能，然后**开播** |
+
+灌表只写 RAM 不发；`tx_init()` 才是开播 —— 复位读指针到 0、应用频点衰减、开 RAM 读
+使能。所以开播时写指针和读指针都是 0，表必然从第一个字开始播。板上把 64 包**全部收进
+缓冲、到齐才写 RAM**，因此丢包或中断只是表不落地，RAM 一个字都不动，重跑一遍即可。
+
+case 134 包格式：
+
+| 偏移 | 字段 | 类型 |
+|------|------|------|
+| 0 | 命令 = 134 | u8 |
+| 1 | `table_sel`：0 = BPSK，1 = QPSK | u8 |
+| 2..3 | `word_offset`，小端 u16，取 0/512/…/32256 | u16 |
+| 4..1027 | 512 个字 | 1024 B |
+
+表文件必须是 **`.bin`，恰好 65536 字节**（小端 u16 = 32768 字）。字的含义：BPSK 每字
+16 个符号、bit0 在前；QPSK 每字 8 个符号，每符号 2 bit，低位是 I、高位是 Q。
+
+> **使能开关**：`ps/top.vhd:4755-4765` 把 PS 与 VIO 对发射链路的控制二选一，由
+> `probe_out7`（`tx_sel_vio_ps`）决定，上电默认 0 = 选 VIO，此时 PS 写的频点 / 衰减 /
+> 使能**全被忽略**；而 RAM 写端口绕过这个 mux，症状是"表灌进去了、就是不发射"。
+> `tcl/vio.tcl` 现在默认置 1 交给 PS，**每次下完 bitstream 都要重跑**。
+
+指针位宽：
+
+| 指针 | 位置 | 计数对象 | 总数 | 位宽 |
+|------|------|----------|------|------|
+| PS 写地址 | `ps/arm_interface_write_1.vhd` | 16 bit 字 | 32768 | 15 |
+| BPSK 读指针 | `rtl/bpsk_ram.v` | 1 bit 符号 | 524288 | 19 |
+| QPSK 读指针 | `rtl/qpsk_ram.v` | 2 bit 符号 | 262144 | 18 |
+
+写地址计数器靠位宽自动回绕，**必须恰好 15 位**，多一位会变成 65536 回绕、后半段越界。
+整表 32768 字正好一整圈，所以每次灌表后指针必回 0。
 
 ### 3.2 新增一对速率
 
@@ -164,7 +217,7 @@ pcie-tx/
 
 ## 四、新增速率的滤波器设计
 
-### 2.1 成形滤波
+### 4.1 成形滤波
 
 升余弦（RRC/RCOS）滤波器：
 

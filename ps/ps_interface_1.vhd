@@ -454,10 +454,10 @@ entity ps_interface_1 is
         atten_bpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
         atten_qpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
         ram_w_en_bpsk_ps    : out STD_LOGIC;
-        ram_w_addr_bpsk_ps  : out STD_LOGIC_VECTOR(4 downto 0);
+        ram_w_addr_bpsk_ps  : out STD_LOGIC_VECTOR(14 downto 0);
         ram_w_data_bpsk_ps  : out STD_LOGIC_VECTOR(15 downto 0);
         ram_w_en_qpsk_ps    : out STD_LOGIC;
-        ram_w_addr_qpsk_ps  : out STD_LOGIC_VECTOR(4 downto 0);
+        ram_w_addr_qpsk_ps  : out STD_LOGIC_VECTOR(14 downto 0);
         ram_w_data_qpsk_ps  : out STD_LOGIC_VECTOR(15 downto 0)
 	);
 end ps_interface_1;
@@ -826,10 +826,10 @@ component arm_interface_write_1
         atten_bpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
         atten_qpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
         ram_w_en_bpsk_ps    : out STD_LOGIC;
-        ram_w_addr_bpsk_ps  : out STD_LOGIC_VECTOR(4 downto 0);
+        ram_w_addr_bpsk_ps  : out STD_LOGIC_VECTOR(14 downto 0);
         ram_w_data_bpsk_ps  : out STD_LOGIC_VECTOR(15 downto 0);
         ram_w_en_qpsk_ps    : out STD_LOGIC;
-        ram_w_addr_qpsk_ps  : out STD_LOGIC_VECTOR(4 downto 0);
+        ram_w_addr_qpsk_ps  : out STD_LOGIC_VECTOR(14 downto 0);
         ram_w_data_qpsk_ps  : out STD_LOGIC_VECTOR(15 downto 0)
 	);
 end component;

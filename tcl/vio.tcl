@@ -9,7 +9,7 @@
 #   probe_out4 = dds_pinc_qpsk        (16 bit)
 #   probe_out5 = dds_poff_bpsk        (128 bit)
 #   probe_out6 = dds_poff_qpsk        (128 bit)
-#   probe_out7 = tx_sel_vio_ps        (1 bit)
+#   probe_out7 = tx_sel_vio_ps        (1 bit)   (1 = PS owns the TX chain, 0 = VIO)
 #   probe_out8 = atten_bpsk           (16 bit signed, Q1.14, 0x4000 = 0 dB)
 #   probe_out9 = atten_qpsk           (16 bit signed, Q1.14, 0x4000 = 0 dB)
 #   probe_out10 = bpsk_en             (1 bit)
@@ -30,9 +30,32 @@
 #   Hardware Manager -> Open Target -> Auto Connect, then in Tcl
 #   Console: source vio.tcl
 #
+#   By default this hands the transmit chain to the PS (SET_TX_CTRL = ps),
+#   which is what the UDP symbol-table upload needs. To drive the chain from
+#   this VIO instead (the pre-upload bring-up flow):
+#       set SET_TX_CTRL vio ; source vio.tcl
+#
 # Note: hold the chain in reset while programming pinc/poff, then
 #       release resets, assert bpsk/qpsk enable, and finally assert ram_en.
+#       Those steps only take effect when SET_TX_CTRL is "vio".
 # =====================================================================
+
+# Who drives the transmit chain. ps/top.vhd:4755-4765 muxes every TX control
+# signal between this VIO and the PS on probe_out7 (tx_sel_vio_ps):
+#
+#   "ps"  -> tx_sel_vio_ps = 1: the PS owns tx_rstn/ram_en/freq/atten/enable.
+#            This is what send_tx_init.py (case 133/134) needs, and the only
+#            setting under which an uploaded symbol table is transmitted.
+#            probe_out0..6/10/11 below become inert.
+#   "vio" -> tx_sel_vio_ps = 0: probe_out0..6/10/11 drive the chain and every
+#            value the PS writes is ignored.
+#
+# The probe powers up at 0, so without writing it the PS path is dead -- and
+# the symptom is nasty: an uploaded table lands in the RAM fine (the write
+# port bypasses the mux, ps/top.vhd:4781-4786) but nothing is ever sent.
+# To get the old VIO-only bring-up back:
+#   set SET_TX_CTRL vio ; source vio.tcl
+set SET_TX_CTRL ps
 
 set VIO_NAME  u_vio_tx
 set LTX       E:/yyy/TSF_simulator_6.0/bit/top.ltx
@@ -44,7 +67,7 @@ set POFF_QPSK 0x071C2AAB4E3971C79555B8E4DC720000
 # ---------------------------------------------------------------------
 # Main flow (wrapped in a proc to avoid polluting global variables)
 proc vio_tx_setup {} {
-    global VIO_NAME LTX PINC_BPSK PINC_QPSK POFF_BPSK POFF_QPSK
+    global VIO_NAME LTX PINC_BPSK PINC_QPSK POFF_BPSK POFF_QPSK SET_TX_CTRL
 
     if {[info commands get_hw_vios] eq ""} {
         error "Run inside Vivado Hardware Manager with the target connected"
@@ -126,6 +149,15 @@ proc vio_tx_setup {} {
     set_property PROBE_OUT6.VALUE $POFF_QPSK $vio
     set_property PROBE_OUT10.VALUE 1 $vio         ;# bpsk_en
     set_property PROBE_OUT11.VALUE 1 $vio         ;# qpsk_en
+
+    # Hand the chain to the PS or keep it here -- see the SET_TX_CTRL note above.
+    if {$SET_TX_CTRL eq "ps"} {
+        set_property PROBE_OUT7.VALUE 1 $vio      ;# tx_sel_vio_ps -> PS
+    } elseif {$SET_TX_CTRL eq "vio"} {
+        set_property PROBE_OUT7.VALUE 0 $vio      ;# tx_sel_vio_ps -> VIO
+    } else {
+        error "SET_TX_CTRL must be \"ps\" or \"vio\", got \"$SET_TX_CTRL\""
+    }
     after 100
 
     # Release the DDS and tx resets, then start transmission
@@ -145,7 +177,18 @@ proc vio_tx_setup {} {
     puts "  poff_qpsk  = [get_property PROBE_OUT6.VALUE $vio]"
     puts "  bpsk_en    = [get_property PROBE_OUT10.VALUE $vio]"
     puts "  qpsk_en    = [get_property PROBE_OUT11.VALUE $vio]"
-    puts "Transmit chain enabled, ready to run ila.tcl"
+    puts "  tx_sel_vio_ps = [get_property PROBE_OUT7.VALUE $vio]  (SET_TX_CTRL=$SET_TX_CTRL)"
+
+    if {$SET_TX_CTRL eq "vio"} {
+        puts "Transmit chain enabled from VIO, ready to run ila.tcl"
+        puts "NOTE: tx_sel_vio_ps = 0, so the PS is ignored -- send_tx_init.py"
+        puts "      (case 133/134) will not control the chain in this mode."
+    } else {
+        puts "tx_sel_vio_ps = 1: the PS owns the transmit chain."
+        puts "The probe_out0..6/10/11 values above are inert in this mode."
+        puts "Next: python send_tx_init.py --table <file>   (loads the symbol"
+        puts "      table and starts transmission; tx_init() runs on the board)"
+    }
 }
 
 if {[info commands get_hw_vios] ne ""} {

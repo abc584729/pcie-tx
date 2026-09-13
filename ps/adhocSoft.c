@@ -1,6 +1,17 @@
 #include "AdhocSoft.h"
 #include "pcie_tx.h"
 
+/* 符号表分片上传（case 134）：一张表 32768 字，分 64 包，每包 512 字 = 1028 字节 */
+#define TX_TABLE_CHUNK_WORDS (512)
+#define TX_TABLE_WORDS       (32768)
+#define TX_TABLE_CHUNKS      (TX_TABLE_WORDS / TX_TABLE_CHUNK_WORDS)
+#define TX_TABLE_PKT_LEN     (4 + 2 * TX_TABLE_CHUNK_WORDS)
+
+/* 整表收齐再写 RAM：64 KB 的 .bss，外加 64 包的到齐标记 */
+static u16 tx_table_buf[TX_TABLE_WORDS];
+static u8  tx_table_got[TX_TABLE_CHUNKS];
+static U16 tx_table_cnt;
+
 char localIPDef[20] = "192.168.1.10";
 char hostIPDef[20] = "192.168.1.1";
 ID_INFO_TYPE localIDInfo;
@@ -1411,6 +1422,71 @@ void ProcCmd(unsigned char *pBuf, U16 len)
 			printf("bpsk set as: enable = %d, dds_f = %f, attenuation = %f.\r\n", ctrl_bpsk, fre_bpsk, atten_bpsk);
 			printf("qpsk set as: enable = %d, dds_f = %f, attenuation = %f.\r\n", ctrl_qpsk, fre_qpsk, atten_qpsk);
 			break;
+		case 134:
+		{
+			U16 word_offset;
+			U16 chunk_idx;
+			int k;
+
+			/* 超长包会被 lwip_read 静默截断，短包尾部是 memset 过的 0，
+			 * 所以只认精确长度 —— 宁可丢包，也不能拿半截数据去填表 */
+			if (len != TX_TABLE_PKT_LEN)
+			{
+				printf("tx table: bad len %d (expect %d), dropped\r\n",
+				       len, TX_TABLE_PKT_LEN);
+				break;
+			}
+
+			word_offset = (U16)(pBuf[2] | ((U16)pBuf[3] << 8));
+			if (pBuf[1] > 1 || word_offset >= TX_TABLE_WORDS ||
+			    (word_offset % TX_TABLE_CHUNK_WORDS) != 0)
+			{
+				printf("tx table: bad sel/offset %u/%u, dropped\r\n",
+				       pBuf[1], word_offset);
+				break;
+			}
+			chunk_idx = word_offset / TX_TABLE_CHUNK_WORDS;
+
+			/* 表头开一张新表：丢掉上一张没收完的残料 */
+			if (chunk_idx == 0)
+			{
+				memset(tx_table_got, 0, sizeof(tx_table_got));
+				tx_table_cnt = 0;
+			}
+
+			/* 重复到达的包只覆盖数据，不重复计数 */
+			if (!tx_table_got[chunk_idx])
+			{
+				tx_table_got[chunk_idx] = 1;
+				tx_table_cnt++;
+			}
+
+			for (k = 0; k < TX_TABLE_CHUNK_WORDS; k++)
+			{
+				tx_table_buf[word_offset + k] =
+					(U16)(pBuf[4 + 2 * k] | ((U16)pBuf[5 + 2 * k] << 8));
+			}
+
+			printf("tx table: sel %u chunk %u/%u got %u/%u\r\n",
+			       pBuf[1], chunk_idx, TX_TABLE_CHUNKS - 1,
+			       tx_table_cnt, TX_TABLE_CHUNKS);
+
+			/* 64 包到齐，整表一次性落地 */
+			if (tx_table_cnt == TX_TABLE_CHUNKS)
+			{
+				if (pBuf[1] == 0)
+				{
+					write_bpsk_ram(tx_table_buf, TX_TABLE_WORDS);
+				}
+				else
+				{
+					write_qpsk_ram(tx_table_buf, TX_TABLE_WORDS);
+				}
+				tx_table_cnt = 0;
+				memset(tx_table_got, 0, sizeof(tx_table_got));
+			}
+			break;
+		}
 //20260902
 		default:
 			printf("debug: type %d wrong", type);
