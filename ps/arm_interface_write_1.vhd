@@ -386,6 +386,7 @@ entity arm_interface_write_1 is
         ram_en_ps        : out STD_LOGIC;
         bpsk_en_ps       : out STD_LOGIC;
         qpsk_en_ps       : out STD_LOGIC;
+        rate_sel_ps      : out STD_LOGIC;   -- 发射速率选择：0 -> bpsk 450k / qpsk 4.5M，1 -> bpsk 400k / qpsk 6.667M
         dds_rstn_ps      : out STD_LOGIC;
         dds_pinc_bpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
         dds_pinc_qpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
@@ -727,6 +728,7 @@ constant ADDR_RAM_WDATA_BPSK  : std_logic_vector(11 downto 0) := x"708";
 constant ADDR_RAM_WDATA_QPSK  : std_logic_vector(11 downto 0) := x"70A";
 constant ADDR_BPSK_EN         : std_logic_vector(11 downto 0) := x"70C";
 constant ADDR_QPSK_EN         : std_logic_vector(11 downto 0) := x"70E";
+constant ADDR_RATE_SEL        : std_logic_vector(11 downto 0) := x"710";
 
 ----    bpsk/qpsk RAM 写：地址匹配、下降沿、计数器内部信号    ----
 signal ram_wdata_bpsk_eq    : std_logic;
@@ -5529,6 +5531,19 @@ begin
 		if ps_cen = '0' and ps_wen = '0' then
 			if ps_addr = ADDR_QPSK_EN then
 				qpsk_en_ps <= ps_dout(0);
+			end if;
+		end if;
+	end if;
+end process;
+
+process(reset_128M,clk_128M)
+begin
+	if reset_128M = '0' then
+		rate_sel_ps <= '0';
+	elsif clk_128M'event and clk_128M = '1' then
+		if ps_cen = '0' and ps_wen = '0' then
+			if ps_addr = ADDR_RATE_SEL then
+				rate_sel_ps <= ps_dout(0);
 			end if;
 		end if;
 	end if;

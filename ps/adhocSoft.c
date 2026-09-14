@@ -78,6 +78,7 @@ double atten_bpsk = 0;
 double atten_qpsk = 0;
 u8 ctrl_bpsk = 1;
 u8 ctrl_qpsk = 1;
+u8 tx_rate_sel = 0;    /* ËÙÂÊÑ¡Ôñ£º0 -> bpsk 450k / qpsk 4.5M£¬1 -> bpsk 400k / qpsk 6.667M */
 //20260902
 
 #if 1
@@ -1416,11 +1417,13 @@ void ProcCmd(unsigned char *pBuf, U16 len)
 			ctrl_qpsk = pBuf[18];
 			memcpy(&fre_qpsk, &pBuf[19], 8);
 			memcpy(&atten_qpsk, &pBuf[27], 8);
+			tx_rate_sel = (len >= 36) ? (u8)(pBuf[35] & 0x1) : 0;
 
 			tx_init();
 
 			printf("bpsk set as: enable = %d, dds_f = %f, attenuation = %f.\r\n", ctrl_bpsk, fre_bpsk, atten_bpsk);
 			printf("qpsk set as: enable = %d, dds_f = %f, attenuation = %f.\r\n", ctrl_qpsk, fre_qpsk, atten_qpsk);
+			printf("tx rate select = %d.\r\n", tx_rate_sel);
 			break;
 		case 134:
 		{

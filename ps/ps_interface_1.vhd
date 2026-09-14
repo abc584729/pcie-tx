@@ -446,6 +446,7 @@ entity ps_interface_1 is
         ram_en_ps        : out STD_LOGIC;
         bpsk_en_ps       : out STD_LOGIC;
         qpsk_en_ps       : out STD_LOGIC;
+        rate_sel_ps      : out STD_LOGIC;
         dds_rstn_ps      : out STD_LOGIC;
         dds_pinc_bpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
         dds_pinc_qpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
@@ -818,6 +819,7 @@ component arm_interface_write_1
         ram_en_ps        : out STD_LOGIC;
         bpsk_en_ps       : out STD_LOGIC;
         qpsk_en_ps       : out STD_LOGIC;
+        rate_sel_ps      : out STD_LOGIC;
         dds_rstn_ps      : out STD_LOGIC;
         dds_pinc_bpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
         dds_pinc_qpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
@@ -1270,6 +1272,7 @@ U1 : arm_interface_write_1 Port map (
         ram_en_ps        => ram_en_ps,
         bpsk_en_ps       => bpsk_en_ps,
         qpsk_en_ps       => qpsk_en_ps,
+        rate_sel_ps      => rate_sel_ps,
         dds_rstn_ps      => dds_rstn_ps,
         dds_pinc_bpsk_ps => dds_pinc_bpsk_ps,
         dds_pinc_qpsk_ps => dds_pinc_qpsk_ps,

@@ -335,6 +335,7 @@ signal		tx_rstn       :   STD_LOGIC_VECTOR(0 downto 0);
 signal		ram_en        :   STD_LOGIC_VECTOR(0 downto 0);   
 signal		bpsk_en       :   STD_LOGIC_VECTOR(0 downto 0);   
 signal		qpsk_en       :   STD_LOGIC_VECTOR(0 downto 0);   
+signal		rate_sel       :   STD_LOGIC_VECTOR(0 downto 0);   
 signal		dds_rstn      :   STD_LOGIC_VECTOR(0 downto 0);   
 signal		dds_pinc_bpsk :   STD_LOGIC_VECTOR(15 downto 0);   
 signal		dds_pinc_qpsk :   STD_LOGIC_VECTOR(15 downto 0);   
@@ -348,6 +349,7 @@ signal		tx_rstn_ps     :   STD_LOGIC;
 signal		ram_en_ps      :   STD_LOGIC;
 signal		bpsk_en_ps     :   STD_LOGIC;
 signal		qpsk_en_ps     :   STD_LOGIC;
+signal		rate_sel_ps    :   STD_LOGIC;
 signal		dds_rstn_ps    :   STD_LOGIC;
 signal		dds_pinc_bpsk_ps :   STD_LOGIC_VECTOR(15 downto 0);
 signal		dds_pinc_qpsk_ps :   STD_LOGIC_VECTOR(15 downto 0);
@@ -370,6 +372,7 @@ signal      tx_rstn_mux       : STD_LOGIC;
 signal      ram_en_mux        : STD_LOGIC;
 signal      bpsk_en_mux       : STD_LOGIC;
 signal      qpsk_en_mux       : STD_LOGIC;
+signal      rate_sel_mux      : STD_LOGIC;
 signal      dds_rstn_mux      : STD_LOGIC;
 signal      dds_pinc_bpsk_mux : STD_LOGIC_VECTOR(15 downto 0);
 signal      dds_pinc_qpsk_mux : STD_LOGIC_VECTOR(15 downto 0);
@@ -393,7 +396,8 @@ COMPONENT vio_tx
     probe_out8 : OUT STD_LOGIC_VECTOR(15 DOWNTO 0);
     probe_out9 : OUT STD_LOGIC_VECTOR(15 DOWNTO 0);
     probe_out10 : OUT STD_LOGIC_VECTOR(0 DOWNTO 0);
-    probe_out11 : OUT STD_LOGIC_VECTOR(0 DOWNTO 0)
+    probe_out11 : OUT STD_LOGIC_VECTOR(0 DOWNTO 0),
+    probe_out12 : OUT STD_LOGIC_VECTOR(0 DOWNTO 0)
   );
 END COMPONENT;
 
@@ -405,6 +409,7 @@ COMPONENT tx_top
     ram_en : IN STD_LOGIC;
     bpsk_en : IN STD_LOGIC;
     qpsk_en : IN STD_LOGIC;
+    rate_sel : IN STD_LOGIC;
     dds_rstn : IN STD_LOGIC;
     dds_pinc_bpsk : in  STD_LOGIC_VECTOR(15 DOWNTO 0);
     dds_pinc_qpsk : in STD_LOGIC_VECTOR(15 DOWNTO 0);
@@ -1308,6 +1313,7 @@ component ps_interface_1 is
         ram_en_ps        : out STD_LOGIC;
         bpsk_en_ps       : out STD_LOGIC;
         qpsk_en_ps       : out STD_LOGIC;
+        rate_sel_ps      : out STD_LOGIC;
         dds_rstn_ps      : out STD_LOGIC;
         dds_pinc_bpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
         dds_pinc_qpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
@@ -3884,6 +3890,7 @@ Port map (
         ram_en_ps        => ram_en_ps,
         bpsk_en_ps       => bpsk_en_ps,
         qpsk_en_ps       => qpsk_en_ps,
+        rate_sel_ps      => rate_sel_ps,
         dds_rstn_ps      => dds_rstn_ps,
         dds_pinc_bpsk_ps => dds_pinc_bpsk_ps,
         dds_pinc_qpsk_ps => dds_pinc_qpsk_ps,
@@ -4748,7 +4755,8 @@ u_vio_tx : vio_tx
     probe_out8 => atten_bpsk,
     probe_out9 => atten_qpsk,
     probe_out10 => bpsk_en,
-    probe_out11 => qpsk_en
+    probe_out11 => qpsk_en,
+    probe_out12 => rate_sel
   );
 
 -- PCIe TX vio/ps Ñ¡Ôñ mux Âß¼­
@@ -4756,6 +4764,7 @@ tx_rstn_mux       <= tx_rstn(0)        when tx_sel_vio_ps(0) = '0' else tx_rstn_
 ram_en_mux        <= ram_en(0)         when tx_sel_vio_ps(0) = '0' else ram_en_ps;
 bpsk_en_mux       <= bpsk_en(0)        when tx_sel_vio_ps(0) = '0' else bpsk_en_ps;
 qpsk_en_mux       <= qpsk_en(0)        when tx_sel_vio_ps(0) = '0' else qpsk_en_ps;
+rate_sel_mux      <= rate_sel(0)       when tx_sel_vio_ps(0) = '0' else rate_sel_ps;
 dds_rstn_mux      <= dds_rstn(0)       when tx_sel_vio_ps(0) = '0' else dds_rstn_ps;
 dds_pinc_bpsk_mux <= dds_pinc_bpsk     when tx_sel_vio_ps(0) = '0' else dds_pinc_bpsk_ps;
 dds_pinc_qpsk_mux <= dds_pinc_qpsk     when tx_sel_vio_ps(0) = '0' else dds_pinc_qpsk_ps;
@@ -4771,6 +4780,7 @@ atten_qpsk_mux <= atten_qpsk     when tx_sel_vio_ps(0) = '0' else atten_qpsk_ps;
     ram_en        => ram_en_mux,
     bpsk_en       => bpsk_en_mux,
     qpsk_en       => qpsk_en_mux,
+    rate_sel      => rate_sel_mux,
     dds_rstn      => dds_rstn_mux,
     dds_pinc_bpsk => dds_pinc_bpsk_mux,
     dds_pinc_qpsk => dds_pinc_qpsk_mux,

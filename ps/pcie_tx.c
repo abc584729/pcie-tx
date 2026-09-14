@@ -12,6 +12,7 @@
 /* config state owned by adhocSoft.c //20260902 case133 */
 extern double fre_bpsk, fre_qpsk, atten_bpsk, atten_qpsk;
 extern u8     ctrl_bpsk, ctrl_qpsk;
+extern u8     tx_rate_sel;
 
 /*
  * DDS 频点配置公共函数
@@ -98,11 +99,17 @@ void set_attenuation_qpsk(double atten_db)
     emc_write(TX_REG_ATTEN_QPSK, coeff);
 }
 
-/* bpsk/qpsk 符号表初始化数据（32 x 16bit） */
-#define RAM_INIT_LEN    (32)
-static const u16 ram_init_data[RAM_INIT_LEN] = {
-    0x8688, 0xC67C, 0x26B3, 0x917E, 0x9EFB, 0x3D91, 0x6813, 0x003A, 0x81ED, 0xAB6E, 0x6145, 0x0A93, 0x67FA, 0x84F3, 0xA1CB, 0x4252, 0x2F02, 0x3E85, 0x2C5B, 0x0854, 0xAAD7, 0x3882, 0x0EB2, 0x92DA, 0x0BBA, 0x7616, 0xDD41, 0xED37, 0x3064, 0xEC34, 0xB0B3, 0xBE57
-};
+/*
+ * 发射速率选择
+ * sel = 0 -> bpsk 450 kHz / qpsk 4.5 MHz（原速率）
+ * sel = 1 -> bpsk 400 kHz / qpsk 6.667 MHz
+ * 该位同时决定 bpsk/qpsk 的符号速率和 add 的截位方式，切换后需重新灌符号表
+ */
+void set_rate_sel(u8 sel)
+{
+    emc_write(TX_REG_RATE_SEL, (u16)(sel & 0x1));
+    printf("tx rate select : %d \r\n", (int)(sel & 0x1));
+}
 
 /*
  * bpsk 符号表 RAM 写
@@ -149,6 +156,8 @@ void tx_init(void)
     /* 衰减取 //20260902 case133 配置的全局量，默认 0dB */
     set_attenuation_bpsk(atten_bpsk);    /* bpsk 数字衰减 */
     set_attenuation_qpsk(atten_qpsk);    /* qpsk 数字衰减 */
+
+    set_rate_sel(tx_rate_sel);    /* 速率选择 //20260902 case133 配置的速率 */
     
     emc_write(TX_REG_RESET, 1);     /* 解除 tx 复位 */
     emc_write(TX_REG_BPSK_ENABLE, ctrl_bpsk);  /* bpsk 使能 */

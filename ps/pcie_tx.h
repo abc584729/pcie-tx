@@ -17,6 +17,7 @@
 #define TX_REG_RAM_WDATA_QPSK   (0x70A)    /* qpsk 符号表写数据（写地址自动递增） */
 #define TX_REG_BPSK_ENABLE      (0x70C)    /* bpsk 使能：0 关闭，1 使能     */
 #define TX_REG_QPSK_ENABLE      (0x70E)    /* qpsk 使能：0 关闭，1 使能     */
+#define TX_REG_RATE_SEL         (0x710)    /* 发射速率选择：0 -> bpsk 450k / qpsk 4.5M，1 -> bpsk 400k / qpsk 6.667M */
 
 /* DDS 中频配置寄存器 */
 #define DDS_REG_RESET           (0x800)    /* dds 复位：0 复位，1 解除复位 */
@@ -40,6 +41,9 @@ void set_dds_frequency_qpsk(double freq_point);
 /* 数字衰减（dB -> Q1.14 系数，写寄存器） */
 void set_attenuation_bpsk(double atten_db);
 void set_attenuation_qpsk(double atten_db);
+
+/* 发射速率选择：sel = 0 -> bpsk 450k / qpsk 4.5M，sel = 1 -> bpsk 400k / qpsk 6.667M */
+void set_rate_sel(unsigned char sel);
 
 /* ================= RAM 符号表写函数 ================= */
 

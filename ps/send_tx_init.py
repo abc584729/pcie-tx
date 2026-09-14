@@ -16,18 +16,25 @@ socket has no frame header and no CRC):
     18       ctrl_qpsk                  u8 (0/1 enable)
     19..26   fre_qpsk   (dds_f)         double (8B, MHz)
     27..34   atten_qpsk (attenuation)   double (8B, dB)
+    35       rate_sel                   u8 (0 = bpsk 450k / qpsk 4.5M,
+                                           1 = bpsk 400k / qpsk 6.667M)
 
-    Total length = 35 bytes.
+    Total length = 36 bytes.
 
     The ARM (Zynq) is little-endian and the C side copies the double with
     memcpy(&double, &pBuf[off], 8), so each double is packed with '<d'.
+
+    rate_sel is the trailing byte added on top of the original 35-byte
+    packet; adhocSoft.c case 133 treats a short (<= 35 byte) packet as
+    rate_sel = 0, so the old layout still works.
 
     Target: node control port UDP 192.168.1.10:14147 (the adhocCtrl
     listening port, see adhocSoft.c).
 
 Examples:
-    cd /d 
+    cd /d
     python send_tx_init.py --ip 192.168.1.10 --bpsk-en 1 --bpsk-freq 100 --bpsk-atten 0 --bpsk-en 1 --qpsk-en 1 --qpsk-freq 200 --bpsk-atten 0
+    python send_tx_init.py --rate 1
 """
 
 import argparse
@@ -40,18 +47,26 @@ OFF_FRE_BPSK = 2
 OFF_ATTEN_BPSK = 10
 OFF_FRE_QPSK = 19
 OFF_ATTEN_QPSK = 27
+OFF_RATE_SEL = 35
 
 # Match pcie_tx.c tx_init() defaults, so running bare = restore default init
 DEF_CTRL = 1
 DEF_FRE_BPSK = 100.0   # MHz
 DEF_FRE_QPSK = 200.0   # MHz
 DEF_ATTEN = 0.0        # dB
+DEF_RATE = 0           # 0 = bpsk 450k / qpsk 4.5M
+
+# rate_sel -> (bpsk, qpsk) symbol rate, for the printout only
+RATE_SEL_LABEL = {
+    0: ('450 kHz', '4.5 MHz'),
+    1: ('400 kHz', '6.667 MHz'),
+}
 
 
 def build_packet(ctrl_bpsk, fre_bpsk, atten_bpsk,
-                 ctrl_qpsk, fre_qpsk, atten_qpsk):
-    """Pack the payload per the case 133 layout; return bytes(35)."""
-    buf = bytearray(35)
+                 ctrl_qpsk, fre_qpsk, atten_qpsk, rate_sel):
+    """Pack the payload per the case 133 layout; return bytes(36)."""
+    buf = bytearray(36)
     buf[0] = CMD_INIT_SETTING
     buf[1] = int(ctrl_bpsk) & 0xFF
     struct.pack_into('<d', buf, OFF_FRE_BPSK, float(fre_bpsk))
@@ -59,6 +74,7 @@ def build_packet(ctrl_bpsk, fre_bpsk, atten_bpsk,
     buf[18] = int(ctrl_qpsk) & 0xFF
     struct.pack_into('<d', buf, OFF_FRE_QPSK, float(fre_qpsk))
     struct.pack_into('<d', buf, OFF_ATTEN_QPSK, float(atten_qpsk))
+    buf[OFF_RATE_SEL] = int(rate_sel) & 0x1
     return bytes(buf)
 
 
@@ -83,11 +99,18 @@ def main():
     ap.add_argument('--qpsk-en', type=int, default=DEF_CTRL, help='QPSK enable 0/1 (default %d)' % DEF_CTRL)
     ap.add_argument('--qpsk-freq', type=float, default=DEF_FRE_QPSK, help='QPSK DDS freq MHz (default %g)' % DEF_FRE_QPSK)
     ap.add_argument('--qpsk-atten', type=float, default=DEF_ATTEN, help='QPSK attenuation dB (default %g)' % DEF_ATTEN)
+    ap.add_argument('--rate', type=int, default=DEF_RATE, choices=(0, 1),
+                    help='symbol rate select: 0 = bpsk 450k/qpsk 4.5M, '
+                         '1 = bpsk 400k/qpsk 6.667M (default %d)' % DEF_RATE)
     ap.add_argument('--dry-run', action='store_true', help='build/print packet only, do not send')
     args = ap.parse_args()
 
     pkt = build_packet(args.bpsk_en, args.bpsk_freq, args.bpsk_atten,
-                       args.qpsk_en, args.qpsk_freq, args.qpsk_atten)
+                       args.qpsk_en, args.qpsk_freq, args.qpsk_atten,
+                       args.rate)
+
+    rate_sel = pkt[OFF_RATE_SEL]
+    bpsk_rate, qpsk_rate = RATE_SEL_LABEL[rate_sel]
 
     print('=== case 133 initialization setting pkt (len=%d) ===' % len(pkt))
     print('cmd     : %d' % pkt[0])
@@ -95,6 +118,7 @@ def main():
           % (args.bpsk_en, args.bpsk_freq, args.bpsk_atten))
     print('QPSK    : enable=%d  dds_f=%.6f MHz  attenuation=%.6f dB'
           % (args.qpsk_en, args.qpsk_freq, args.qpsk_atten))
+    print('rate_sel: %d  (bpsk %s / qpsk %s)' % (rate_sel, bpsk_rate, qpsk_rate))
     print(hex_dump(pkt))
 
     if args.dry_run:
