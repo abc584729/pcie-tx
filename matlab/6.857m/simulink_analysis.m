@@ -3,7 +3,7 @@ close all;
 figure;
 subplot(212);
 Rs = 400e3;
-fs = 9*Rs;
+fs = 9*Rs*3*8;
 x = double(out.simout);
 [pxx,f] = pwelch(x, 1000, 500, 1024, fs);
 w = 2*pi*f/fs;
