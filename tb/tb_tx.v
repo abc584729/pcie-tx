@@ -26,6 +26,7 @@ module tb_tx(
 
     reg clk, rst_n, ram_en;
     reg bpsk_en, qpsk_en;
+    reg rate_sel;              // 0 = 450 kHz / 4.5 MHz, 1 = 400 kHz / 6.667 MHz
     reg dds_rstn;
     reg [15:0] dds_pinc_bpsk, dds_pinc_qpsk;
     reg [127:0] dds_poff_bpsk, dds_poff_qpsk;
@@ -47,6 +48,7 @@ module tb_tx(
         ram_en = 0;
         bpsk_en = 1;
         qpsk_en = 1;
+        rate_sel = 0;               // keep the original rates for this test
         dds_rstn = 0;
         atten_bpsk = 16'sd16384;    // Q1.14 0x4000 = 1.0 = 0 dB
         atten_qpsk = 16'sd16384;    // Q1.14 0x4000 = 1.0 = 0 dB
@@ -80,6 +82,7 @@ module tb_tx(
         .ram_en         (ram_en),
         .bpsk_en        (bpsk_en),
         .qpsk_en        (qpsk_en),
+        .rate_sel       (rate_sel),
         .dds_rstn       (dds_rstn),
         .dds_pinc_bpsk  (dds_pinc_bpsk),
         .dds_pinc_qpsk  (dds_pinc_qpsk),

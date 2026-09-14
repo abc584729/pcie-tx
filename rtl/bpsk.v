@@ -23,6 +23,7 @@
 module bpsk(
         input clk, rst_n, ram_en,
         input bpsk_en,
+        input rate_sel,              // 0 = 450 kHz symbol rate, 1 = 400 kHz
         input [15:0] dds_pinc,
         input [127:0] dds_poff,
         input dds_rstn,
@@ -37,6 +38,7 @@ module bpsk(
     bpsk_ram u_bpsk_ram(
         .clk           (clk),
         .rst_n         (rst_n),
+        .rate_sel      (rate_sel),
         .w_en          (w_en),
         .w_addr        (w_addr),
         .w_data        (w_data),
@@ -70,15 +72,30 @@ module bpsk(
         .dout_valid  (pulse_atten_valid)
     );
 
-    // 450k upsampling chain: 8x zero insert -> RRC -> 5x -> 10x -> 8x parallel
-    wire [127:0] sig;
-    upsamping_450k u_upsamping_450k(
+    wire [15:0] din_450 = rate_sel ? 16'd0 : pulse_atten;
+    wire        din_450_valid = rate_sel ? 1'b0 : pulse_atten_valid;
+    wire [15:0] din_400 = rate_sel ? pulse_atten : 16'd0;
+    wire        din_400_valid = rate_sel ? pulse_atten_valid : 1'b0;
+
+    wire [127:0] sig_450, sig_400;
+
+    upsamping_450k u_upsampling_450k(
         .clk         (clk),
         .rst_n       (rst_n),
-        .din         (pulse_atten),
-        .din_valid   (pulse_atten_valid),
-        .sig         (sig)
+        .din         (din_450),
+        .din_valid   (din_450_valid),
+        .sig         (sig_450)
     );
+
+    upsamping_400k u_upsampling_400k(
+        .clk         (clk),
+        .rst_n       (rst_n),
+        .din         (din_400),
+        .din_valid   (din_400_valid),
+        .sig         (sig_400)
+    );
+
+    wire [127:0] sig = rate_sel ? sig_400 : sig_450;
 
     wire [127:0] dds_i, dds_q;
     dds_x8 u_dds_x8(

@@ -23,6 +23,7 @@
 module tx_top(
         input clk, rst_n, ram_en,
         input bpsk_en, qpsk_en,
+        input rate_sel,              // 0 = bpsk 450 kHz / qpsk 4.5 MHz, 1 = bpsk 400 kHz / qpsk 6.667 MHz
         input dds_rstn,
         input signed [15:0] atten_bpsk, // Q1.14: 0x4000 = 1.0 (0 dB), 0x2000 = 0.5 (-6 dB)
         input signed [15:0] atten_qpsk,
@@ -45,6 +46,7 @@ module tx_top(
         .rst_n         (rst_n),
         .ram_en        (ram_en),
         .bpsk_en       (bpsk_en),
+        .rate_sel      (rate_sel),
         .dds_pinc      (dds_pinc_bpsk),
         .dds_poff      (dds_poff_bpsk),
         .dds_rstn      (dds_rstn),
@@ -62,6 +64,7 @@ module tx_top(
         .rst_n         (rst_n),
         .ram_en        (ram_en),
         .qpsk_en       (qpsk_en),
+        .rate_sel      (rate_sel),
         .dds_pinc      (dds_pinc_qpsk),
         .dds_poff      (dds_poff_qpsk),
         .dds_rstn      (dds_rstn),
@@ -76,6 +79,7 @@ module tx_top(
     add u_add(
         .clk           (clk),
         .rst_n         (rst_n),
+        .rate_sel      (rate_sel),
         .i0            (i_0),
         .q0            (q_0),
         .i1            (i_1),

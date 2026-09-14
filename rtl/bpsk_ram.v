@@ -23,6 +23,7 @@
 module bpsk_ram(
     input clk, rst_n,
     input rd_en,             
+    input rate_sel,          
     input w_en,                
     input [14:0] w_addr,
     input [15:0] w_data,
@@ -30,20 +31,22 @@ module bpsk_ram(
     output rdata_valid
     );
 
-    // ·ûºÅËÙÂÊ: 450 kHz
-    parameter COUNT_MAX = 9'd400;
+    // ·ûºÅËÙÂÊ: rate_sel = 0 -> 450 kHz, 1 -> 400 kHz
+    parameter COUNT_MAX_450K = 9'd400;
+    parameter COUNT_MAX_400K = 9'd450;
+    wire [8:0] count_max = rate_sel ? COUNT_MAX_400K : COUNT_MAX_450K;
 
     reg [8:0] count;
     always @(posedge clk or negedge rst_n) begin
         if(!rst_n) count <= 0;
         else begin
-            if(rd_en && count < COUNT_MAX-1) count <= count + 1;
+            if(rd_en && count < count_max - 1'b1) count <= count + 1;
             else count <= 0;
         end
     end
 
     // ¶ÁÂö³å
-    wire flag = rd_en && (count == COUNT_MAX-1);
+    wire flag = rd_en && (count == count_max - 1'b1);
 
     // ¶ÁÖ¸Õë
     reg [18:0] rptr;

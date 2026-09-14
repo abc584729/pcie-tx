@@ -9,10 +9,6 @@
 // Project Name:
 // Target Devices:
 // Tool Versions:
-// Description: channel-wise sum of two 8-lane (8 x 16-bit) I/Q signal pairs.
-//              16 + 16 -> 17 bit, LSB discarded -> 16 bit (sum[16:1]).
-//              clk/rst_n reserved for interface uniformity, not used.
-//
 // Dependencies:
 //
 // Revision:
@@ -23,6 +19,7 @@
 
 module add(
     input clk, rst_n,
+    input rate_sel,                 // 0 = 450k / 4.5M rates, 1 = 400k / 6.667M rates
     input  signed [127:0] i0, q0,
     input  signed [127:0] i1, q1,
     output [255:0] iq
@@ -36,8 +33,8 @@ module add(
         for (k = 0; k < 8; k = k + 1) begin : g_add
             wire signed [16:0] sum_i = $signed(i0[16*k +: 16]) + $signed(i1[16*k +: 16]);
             wire signed [16:0] sum_q = $signed(q0[16*k +: 16]) + $signed(q1[16*k +: 16]);
-            assign iout[16*k +: 16] = {sum_i[14:0], 1'b0};
-            assign qout[16*k +: 16] = {sum_q[14:0], 1'b0};
+            assign iout[16*k +: 16] = rate_sel ? sum_i[15:0] : {sum_i[14:0], 1'b0};
+            assign qout[16*k +: 16] = rate_sel ? sum_q[15:0] : {sum_q[14:0], 1'b0};
         end
     endgenerate
 

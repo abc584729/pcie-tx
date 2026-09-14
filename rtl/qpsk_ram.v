@@ -23,6 +23,7 @@
 module qpsk_ram(
     input clk, rst_n,
     input rd_en,             
+    input rate_sel,          
     input w_en,                
     input [14:0] w_addr,
     input [15:0] w_data,
@@ -30,20 +31,22 @@ module qpsk_ram(
     output rdata_valid
     );
 
-    // ·ûºÅËÙÂÊ: 4.50 MHz
-    parameter COUNT_MAX = 6'd40;
+    // ·ûºÅËÙÂÊ: rate_sel = 0 -> 4.5 MHz, 1 -> 6.667 MHz
+    parameter COUNT_MAX_4500K = 6'd40;
+    parameter COUNT_MAX_6667K = 6'd27;
+    wire [5:0] count_max = rate_sel ? COUNT_MAX_6667K : COUNT_MAX_4500K;
 
     reg [5:0] count;
     always @(posedge clk or negedge rst_n) begin
         if(!rst_n) count <= 0;
         else begin
-            if(rd_en && count < COUNT_MAX-1) count <= count + 1;
+            if(rd_en && count < count_max - 1'b1) count <= count + 1;
             else count <= 0;
         end
     end
 
     // ¶ÁÂö³å
-    wire flag = rd_en && (count == COUNT_MAX-1);
+    wire flag = rd_en && (count == count_max - 1'b1);
 
     // ¶ÁÖ¸Õë
     reg [17:0] rptr;
