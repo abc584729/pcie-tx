@@ -76,73 +76,16 @@ module qpsk(
         .dout_valid  (pulse_atten_valid)
     );
 
-    // 8x zero insertion (40 clk -> 5 clk), I/Q lanes
-    wire [15:0] pad_i8, pad_q8;
-    wire pad_8_valid;
-    zero_interpolator #(.TIME_FACTOR(40), .INTERPOLATION_FACTOR(8)) u_zero_padding_8_i(
-        .clk(clk), .rst_n(rst_n),
-        .x(pulse_i_atten), .x_valid(pulse_atten_valid),
-        .y(pad_i8), .y_valid(pad_8_valid)
-    );
-    zero_interpolator #(.TIME_FACTOR(40), .INTERPOLATION_FACTOR(8)) u_zero_padding_8_q(
-        .clk(clk), .rst_n(rst_n),
-        .x(pulse_q_atten), .x_valid(pulse_atten_valid),
-        .y(pad_q8), .y_valid()   // same slot phase as the I lane, left open
-    );
-
-    // RCOS shaping (En14), I/Q
-    wire [15:0] rcos_i, rcos_q;
-    wire rcos_valid;
-    rcos_filter_iq u_rcos(
-        .clk              (clk),
-        .clk_enable       (pad_8_valid),
-        .reset            (reset),
-        .filter_in_i      (pad_i8),
-        .filter_in_q      (pad_q8),
-        .filter_out_i     (rcos_i),
-        .filter_out_q     (rcos_q),
-        .filter_out_valid (rcos_valid)
-    );
-
-    // 5x zero insertion (5 clk -> 1 clk), I/Q lanes
-    wire [15:0] pad_i5, pad_q5;
-    wire pad_5_valid;
-    zero_interpolator #(.TIME_FACTOR(5), .INTERPOLATION_FACTOR(5)) u_zero_padding_5_i(
-        .clk(clk), .rst_n(rst_n),
-        .x(rcos_i), .x_valid(rcos_valid),
-        .y(pad_i5), .y_valid(pad_5_valid)
-    );
-    zero_interpolator #(.TIME_FACTOR(5), .INTERPOLATION_FACTOR(5)) u_zero_padding_5_q(
-        .clk(clk), .rst_n(rst_n),
-        .x(rcos_q), .x_valid(rcos_valid),
-        .y(pad_q5), .y_valid()   // slot every clk, left open
-    );
-
-    // 5x anti-imaging (En14), I/Q
-    wire [15:0] s_i5, s_q5;
-    wire s5_valid;
-    anti_imaging_filter_5_iq u_f5(
-        .clk              (clk),
-        .clk_enable       (pad_5_valid),
-        .reset            (reset),
-        .filter_in_i      (pad_i5),
-        .filter_in_q      (pad_q5),
-        .filter_out_i     (s_i5),
-        .filter_out_q     (s_q5),
-        .filter_out_valid (s5_valid)
-    );
-
-    // 8x polyphase parallel anti-imaging -> 8 samples/clk, I/Q
+    // 4.5 MHz upsampling chain: 8x zero insert -> RRC -> 5x -> 8x parallel
     wire [127:0] sig_i_par, sig_q_par;
-    anti_imaging_filter_8_par_iq u_f8(
-        .clk        (clk),
-        .clk_enable (s5_valid),
-        .reset      (reset),
-        .filter_in_i(s_i5),
-        .filter_in_q(s_q5),
-        .filter_out_i(sig_i_par),
-        .filter_out_q(sig_q_par),
-        .ce_out     (sig_valid)
+    upsamping_4500k u_upsamping_4500k(
+        .clk         (clk),
+        .rst_n       (rst_n),
+        .din_i       (pulse_i_atten),
+        .din_q       (pulse_q_atten),
+        .din_valid   (pulse_atten_valid),
+        .sig_i       (sig_i_par),
+        .sig_q       (sig_q_par)
     );
 
     wire [127:0] dds_i, dds_q;
