@@ -1,0 +1,4 @@
+python send_symbol_table.py --table bpsk.bin --table-sel bpsk
+python send_symbol_table.py --table qpsk.bin --table-sel qpsk
+python send_tx_init.py --ip 192.168.1.10 --bpsk-en 1 --bpsk-freq 100 --bpsk-atten 0 --qpsk-en 1 --qpsk-freq 200 --qpsk-atten 0
+source C:/Users/q/Desktop/TSF_simulator_6.0/TSF_simulator_6.0/pcie-tx-main/tcl/ila.tcl

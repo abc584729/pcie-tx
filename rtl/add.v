@@ -33,8 +33,8 @@ module add(
         for (k = 0; k < 8; k = k + 1) begin : g_add
             wire signed [16:0] sum_i = $signed(i0[16*k +: 16]) + $signed(i1[16*k +: 16]);
             wire signed [16:0] sum_q = $signed(q0[16*k +: 16]) + $signed(q1[16*k +: 16]);
-            assign iout[16*k +: 16] = rate_sel ? sum_i[15:0] : {sum_i[14:0], 1'b0};
-            assign qout[16*k +: 16] = rate_sel ? sum_q[15:0] : {sum_q[14:0], 1'b0};
+            assign iout[16*k +: 16] = rate_sel ? {sum_i[14:0], 1'b0} : {sum_i[14:0], 1'b0};
+            assign qout[16*k +: 16] = rate_sel ? {sum_q[14:0], 1'b0} : {sum_q[14:0], 1'b0};
         end
     endgenerate
 

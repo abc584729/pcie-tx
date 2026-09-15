@@ -18,9 +18,9 @@
 
 set N        20
 set ILA_NAME u_ila_tx
-set OUT_FILE E:/yyy/TSF_simulator_6.0/pcie-tx-main/matlab/result.csv
+set OUT_FILE C:/Users/q/Desktop/TSF_simulator_6.0/TSF_simulator_6.0/pcie-tx-main/matlab/result.csv
 set TMP_CSV  ./ila_tx_raw.csv
-set LTX      E:/yyy/TSF_simulator_6.0/bit/top.ltx
+set LTX      C:/Users/q/Desktop/TSF_simulator_6.0/TSF_simulator_6.0/bit_new/top.ltx
 
 # ---------------------------------------------------------------------
 # hex string -> binary string (MSB first), zero-padded to width bits
