@@ -23,8 +23,8 @@ module qpsk(
         input clk, rst_n, ram_en,
         input qpsk_en,
         input rate_sel,              // 0 = 4.5 MHz symbol rate, 1 = 6.667 MHz
-        input [15:0] dds_pinc,
-        input [127:0] dds_poff,
+        input [31:0] dds_pinc,
+        input [255:0] dds_poff,
         input dds_rstn,
         input signed [15:0] atten,   // Q1.14: 0x4000 = 1.0 (0 dB), 0x2000 = 0.5 (-6 dB)
         input w_en,

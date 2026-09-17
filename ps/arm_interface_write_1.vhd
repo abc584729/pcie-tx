@@ -388,10 +388,10 @@ entity arm_interface_write_1 is
         qpsk_en_ps       : out STD_LOGIC;
         rate_sel_ps      : out STD_LOGIC;   -- 发射速率选择：0 -> bpsk 450k / qpsk 4.5M，1 -> bpsk 400k / qpsk 6.667M
         dds_rstn_ps      : out STD_LOGIC;
-        dds_pinc_bpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
-        dds_pinc_qpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
-        dds_poff_bpsk_ps : out STD_LOGIC_VECTOR(127 downto 0);
-        dds_poff_qpsk_ps : out STD_LOGIC_VECTOR(127 downto 0);
+        dds_pinc_bpsk_ps : out STD_LOGIC_VECTOR(31 downto 0);
+        dds_pinc_qpsk_ps : out STD_LOGIC_VECTOR(31 downto 0);
+        dds_poff_bpsk_ps : out STD_LOGIC_VECTOR(255 downto 0);
+        dds_poff_qpsk_ps : out STD_LOGIC_VECTOR(255 downto 0);
         atten_bpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
         atten_qpsk_ps : out STD_LOGIC_VECTOR(15 downto 0);
         ram_w_en_bpsk_ps    : out STD_LOGIC;
@@ -700,24 +700,42 @@ constant ADDR_configurable_freq_hopping_phase_init_7 : std_logic_vector(11 downt
 constant ADDR_TX_RSTN           : std_logic_vector(11 downto 0) := x"700";
 constant ADDR_RAM_EN            : std_logic_vector(11 downto 0) := x"702";
 constant ADDR_DDS_RSTN          : std_logic_vector(11 downto 0) := x"800";
-constant ADDR_DDS_PINC_BPSK     : std_logic_vector(11 downto 0) := x"802";
-constant ADDR_DDS_POFF_BPSK_0   : std_logic_vector(11 downto 0) := x"804";
-constant ADDR_DDS_POFF_BPSK_1   : std_logic_vector(11 downto 0) := x"806";
-constant ADDR_DDS_POFF_BPSK_2   : std_logic_vector(11 downto 0) := x"808";
-constant ADDR_DDS_POFF_BPSK_3   : std_logic_vector(11 downto 0) := x"80A";
-constant ADDR_DDS_POFF_BPSK_4   : std_logic_vector(11 downto 0) := x"80C";
-constant ADDR_DDS_POFF_BPSK_5   : std_logic_vector(11 downto 0) := x"80E";
-constant ADDR_DDS_POFF_BPSK_6   : std_logic_vector(11 downto 0) := x"810";
-constant ADDR_DDS_POFF_BPSK_7   : std_logic_vector(11 downto 0) := x"812";
-constant ADDR_DDS_PINC_QPSK     : std_logic_vector(11 downto 0) := x"902";
-constant ADDR_DDS_POFF_QPSK_0   : std_logic_vector(11 downto 0) := x"904";
-constant ADDR_DDS_POFF_QPSK_1   : std_logic_vector(11 downto 0) := x"906";
-constant ADDR_DDS_POFF_QPSK_2   : std_logic_vector(11 downto 0) := x"908";
-constant ADDR_DDS_POFF_QPSK_3   : std_logic_vector(11 downto 0) := x"90A";
-constant ADDR_DDS_POFF_QPSK_4   : std_logic_vector(11 downto 0) := x"90C";
-constant ADDR_DDS_POFF_QPSK_5   : std_logic_vector(11 downto 0) := x"90E";
-constant ADDR_DDS_POFF_QPSK_6   : std_logic_vector(11 downto 0) := x"910";
-constant ADDR_DDS_POFF_QPSK_7   : std_logic_vector(11 downto 0) := x"912";
+constant ADDR_DDS_PINC_BPSK_HIGH           : std_logic_vector(11 downto 0) := x"802";
+constant ADDR_DDS_PINC_BPSK_LOW            : std_logic_vector(11 downto 0) := x"804";
+constant ADDR_DDS_POFF_BPSK_0_HIGH         : std_logic_vector(11 downto 0) := x"806";
+constant ADDR_DDS_POFF_BPSK_0_LOW          : std_logic_vector(11 downto 0) := x"808";
+constant ADDR_DDS_POFF_BPSK_1_HIGH         : std_logic_vector(11 downto 0) := x"80A";
+constant ADDR_DDS_POFF_BPSK_1_LOW          : std_logic_vector(11 downto 0) := x"80C";
+constant ADDR_DDS_POFF_BPSK_2_HIGH         : std_logic_vector(11 downto 0) := x"80E";
+constant ADDR_DDS_POFF_BPSK_2_LOW          : std_logic_vector(11 downto 0) := x"810";
+constant ADDR_DDS_POFF_BPSK_3_HIGH         : std_logic_vector(11 downto 0) := x"812";
+constant ADDR_DDS_POFF_BPSK_3_LOW          : std_logic_vector(11 downto 0) := x"814";
+constant ADDR_DDS_POFF_BPSK_4_HIGH         : std_logic_vector(11 downto 0) := x"816";
+constant ADDR_DDS_POFF_BPSK_4_LOW          : std_logic_vector(11 downto 0) := x"818";
+constant ADDR_DDS_POFF_BPSK_5_HIGH         : std_logic_vector(11 downto 0) := x"81A";
+constant ADDR_DDS_POFF_BPSK_5_LOW          : std_logic_vector(11 downto 0) := x"81C";
+constant ADDR_DDS_POFF_BPSK_6_HIGH         : std_logic_vector(11 downto 0) := x"81E";
+constant ADDR_DDS_POFF_BPSK_6_LOW          : std_logic_vector(11 downto 0) := x"820";
+constant ADDR_DDS_POFF_BPSK_7_HIGH         : std_logic_vector(11 downto 0) := x"822";
+constant ADDR_DDS_POFF_BPSK_7_LOW          : std_logic_vector(11 downto 0) := x"824";
+constant ADDR_DDS_PINC_QPSK_HIGH           : std_logic_vector(11 downto 0) := x"902";
+constant ADDR_DDS_PINC_QPSK_LOW            : std_logic_vector(11 downto 0) := x"904";
+constant ADDR_DDS_POFF_QPSK_0_HIGH         : std_logic_vector(11 downto 0) := x"906";
+constant ADDR_DDS_POFF_QPSK_0_LOW          : std_logic_vector(11 downto 0) := x"908";
+constant ADDR_DDS_POFF_QPSK_1_HIGH         : std_logic_vector(11 downto 0) := x"90A";
+constant ADDR_DDS_POFF_QPSK_1_LOW          : std_logic_vector(11 downto 0) := x"90C";
+constant ADDR_DDS_POFF_QPSK_2_HIGH         : std_logic_vector(11 downto 0) := x"90E";
+constant ADDR_DDS_POFF_QPSK_2_LOW          : std_logic_vector(11 downto 0) := x"910";
+constant ADDR_DDS_POFF_QPSK_3_HIGH         : std_logic_vector(11 downto 0) := x"912";
+constant ADDR_DDS_POFF_QPSK_3_LOW          : std_logic_vector(11 downto 0) := x"914";
+constant ADDR_DDS_POFF_QPSK_4_HIGH         : std_logic_vector(11 downto 0) := x"916";
+constant ADDR_DDS_POFF_QPSK_4_LOW          : std_logic_vector(11 downto 0) := x"918";
+constant ADDR_DDS_POFF_QPSK_5_HIGH         : std_logic_vector(11 downto 0) := x"91A";
+constant ADDR_DDS_POFF_QPSK_5_LOW          : std_logic_vector(11 downto 0) := x"91C";
+constant ADDR_DDS_POFF_QPSK_6_HIGH         : std_logic_vector(11 downto 0) := x"91E";
+constant ADDR_DDS_POFF_QPSK_6_LOW          : std_logic_vector(11 downto 0) := x"920";
+constant ADDR_DDS_POFF_QPSK_7_HIGH         : std_logic_vector(11 downto 0) := x"922";
+constant ADDR_DDS_POFF_QPSK_7_LOW          : std_logic_vector(11 downto 0) := x"924";
 
 ----    PCIe TX 数字衰减器（Q1.14 系数，0x4000 = 0dB）    ----
 constant ADDR_ATTEN_BPSK  : std_logic_vector(11 downto 0) := x"704";
@@ -745,22 +763,22 @@ signal ram_w_addr_qpsk_ps_i : std_logic_vector(14 downto 0);
 signal we_RAM_timeslot_confiuration_internal : std_logic;
 
 ----    PCIe TX (tx_top) PS 配置内部寄存器    ----
-signal dds_poff_bpsk_ps_0 : std_logic_vector(15 downto 0);
-signal dds_poff_bpsk_ps_1 : std_logic_vector(15 downto 0);
-signal dds_poff_bpsk_ps_2 : std_logic_vector(15 downto 0);
-signal dds_poff_bpsk_ps_3 : std_logic_vector(15 downto 0);
-signal dds_poff_bpsk_ps_4 : std_logic_vector(15 downto 0);
-signal dds_poff_bpsk_ps_5 : std_logic_vector(15 downto 0);
-signal dds_poff_bpsk_ps_6 : std_logic_vector(15 downto 0);
-signal dds_poff_bpsk_ps_7 : std_logic_vector(15 downto 0);
-signal dds_poff_qpsk_ps_0 : std_logic_vector(15 downto 0);
-signal dds_poff_qpsk_ps_1 : std_logic_vector(15 downto 0);
-signal dds_poff_qpsk_ps_2 : std_logic_vector(15 downto 0);
-signal dds_poff_qpsk_ps_3 : std_logic_vector(15 downto 0);
-signal dds_poff_qpsk_ps_4 : std_logic_vector(15 downto 0);
-signal dds_poff_qpsk_ps_5 : std_logic_vector(15 downto 0);
-signal dds_poff_qpsk_ps_6 : std_logic_vector(15 downto 0);
-signal dds_poff_qpsk_ps_7 : std_logic_vector(15 downto 0);
+signal dds_poff_bpsk_ps_0 : std_logic_vector(31 downto 0);
+signal dds_poff_bpsk_ps_1 : std_logic_vector(31 downto 0);
+signal dds_poff_bpsk_ps_2 : std_logic_vector(31 downto 0);
+signal dds_poff_bpsk_ps_3 : std_logic_vector(31 downto 0);
+signal dds_poff_bpsk_ps_4 : std_logic_vector(31 downto 0);
+signal dds_poff_bpsk_ps_5 : std_logic_vector(31 downto 0);
+signal dds_poff_bpsk_ps_6 : std_logic_vector(31 downto 0);
+signal dds_poff_bpsk_ps_7 : std_logic_vector(31 downto 0);
+signal dds_poff_qpsk_ps_0 : std_logic_vector(31 downto 0);
+signal dds_poff_qpsk_ps_1 : std_logic_vector(31 downto 0);
+signal dds_poff_qpsk_ps_2 : std_logic_vector(31 downto 0);
+signal dds_poff_qpsk_ps_3 : std_logic_vector(31 downto 0);
+signal dds_poff_qpsk_ps_4 : std_logic_vector(31 downto 0);
+signal dds_poff_qpsk_ps_5 : std_logic_vector(31 downto 0);
+signal dds_poff_qpsk_ps_6 : std_logic_vector(31 downto 0);
+signal dds_poff_qpsk_ps_7 : std_logic_vector(31 downto 0);
 signal value_timeslot_adj_internal : std_logic;
 
 signal flag_lock_reg_PS_read   :  std_logic_vector(1 downto 0); --- 高位为发射端，低位为接收端
@@ -5568,8 +5586,10 @@ begin
 		dds_pinc_bpsk_ps <= (others => '0');
 	elsif clk_128M'event and clk_128M = '1' then
 		if ps_cen = '0' and ps_wen = '0' then
-			if ps_addr = ADDR_DDS_PINC_BPSK then
-				dds_pinc_bpsk_ps <= ps_dout;
+			if ps_addr = ADDR_DDS_PINC_BPSK_HIGH then
+				dds_pinc_bpsk_ps(31 downto 16) <= ps_dout(15 downto 0);
+			elsif ps_addr = ADDR_DDS_PINC_BPSK_LOW then
+				dds_pinc_bpsk_ps(15 downto 0) <= ps_dout(15 downto 0);
 			end if;
 		end if;
 	end if;
@@ -5581,8 +5601,10 @@ begin
 		dds_pinc_qpsk_ps <= (others => '0');
 	elsif clk_128M'event and clk_128M = '1' then
 		if ps_cen = '0' and ps_wen = '0' then
-			if ps_addr = ADDR_DDS_PINC_QPSK then
-				dds_pinc_qpsk_ps <= ps_dout;
+			if ps_addr = ADDR_DDS_PINC_QPSK_HIGH then
+				dds_pinc_qpsk_ps(31 downto 16) <= ps_dout(15 downto 0);
+			elsif ps_addr = ADDR_DDS_PINC_QPSK_LOW then
+				dds_pinc_qpsk_ps(15 downto 0) <= ps_dout(15 downto 0);
 			end if;
 		end if;
 	end if;
@@ -5698,8 +5720,10 @@ begin
 		dds_poff_bpsk_ps_0 <= (others => '0');
 	elsif clk_128M'event and clk_128M = '1' then
 		if ps_cen = '0' and ps_wen = '0' then
-			if ps_addr = ADDR_DDS_POFF_BPSK_0 then
-				dds_poff_bpsk_ps_0 <= ps_dout;
+			if ps_addr = ADDR_DDS_POFF_BPSK_0_HIGH then
+				dds_poff_bpsk_ps_0(31 downto 16) <= ps_dout(15 downto 0);
+			elsif ps_addr = ADDR_DDS_POFF_BPSK_0_LOW then
+				dds_poff_bpsk_ps_0(15 downto 0) <= ps_dout(15 downto 0);
 			end if;
 		end if;
 	end if;
@@ -5712,8 +5736,10 @@ begin
 		dds_poff_bpsk_ps_1 <= (others => '0');
 	elsif clk_128M'event and clk_128M = '1' then
 		if ps_cen = '0' and ps_wen = '0' then
-			if ps_addr = ADDR_DDS_POFF_BPSK_1 then
-				dds_poff_bpsk_ps_1 <= ps_dout;
+			if ps_addr = ADDR_DDS_POFF_BPSK_1_HIGH then
+				dds_poff_bpsk_ps_1(31 downto 16) <= ps_dout(15 downto 0);
+			elsif ps_addr = ADDR_DDS_POFF_BPSK_1_LOW then
+				dds_poff_bpsk_ps_1(15 downto 0) <= ps_dout(15 downto 0);
 			end if;
 		end if;
 	end if;
@@ -5726,8 +5752,10 @@ begin
 		dds_poff_bpsk_ps_2 <= (others => '0');
 	elsif clk_128M'event and clk_128M = '1' then
 		if ps_cen = '0' and ps_wen = '0' then
-			if ps_addr = ADDR_DDS_POFF_BPSK_2 then
-				dds_poff_bpsk_ps_2 <= ps_dout;
+			if ps_addr = ADDR_DDS_POFF_BPSK_2_HIGH then
+				dds_poff_bpsk_ps_2(31 downto 16) <= ps_dout(15 downto 0);
+			elsif ps_addr = ADDR_DDS_POFF_BPSK_2_LOW then
+				dds_poff_bpsk_ps_2(15 downto 0) <= ps_dout(15 downto 0);
 			end if;
 		end if;
 	end if;
@@ -5740,8 +5768,10 @@ begin
 		dds_poff_bpsk_ps_3 <= (others => '0');
 	elsif clk_128M'event and clk_128M = '1' then
 		if ps_cen = '0' and ps_wen = '0' then
-			if ps_addr = ADDR_DDS_POFF_BPSK_3 then
-				dds_poff_bpsk_ps_3 <= ps_dout;
+			if ps_addr = ADDR_DDS_POFF_BPSK_3_HIGH then
+				dds_poff_bpsk_ps_3(31 downto 16) <= ps_dout(15 downto 0);
+			elsif ps_addr = ADDR_DDS_POFF_BPSK_3_LOW then
+				dds_poff_bpsk_ps_3(15 downto 0) <= ps_dout(15 downto 0);
 			end if;
 		end if;
 	end if;
@@ -5754,8 +5784,10 @@ begin
 		dds_poff_bpsk_ps_4 <= (others => '0');
 	elsif clk_128M'event and clk_128M = '1' then
 		if ps_cen = '0' and ps_wen = '0' then
-			if ps_addr = ADDR_DDS_POFF_BPSK_4 then
-				dds_poff_bpsk_ps_4 <= ps_dout;
+			if ps_addr = ADDR_DDS_POFF_BPSK_4_HIGH then
+				dds_poff_bpsk_ps_4(31 downto 16) <= ps_dout(15 downto 0);
+			elsif ps_addr = ADDR_DDS_POFF_BPSK_4_LOW then
+				dds_poff_bpsk_ps_4(15 downto 0) <= ps_dout(15 downto 0);
 			end if;
 		end if;
 	end if;
@@ -5768,8 +5800,10 @@ begin
 		dds_poff_bpsk_ps_5 <= (others => '0');
 	elsif clk_128M'event and clk_128M = '1' then
 		if ps_cen = '0' and ps_wen = '0' then
-			if ps_addr = ADDR_DDS_POFF_BPSK_5 then
-				dds_poff_bpsk_ps_5 <= ps_dout;
+			if ps_addr = ADDR_DDS_POFF_BPSK_5_HIGH then
+				dds_poff_bpsk_ps_5(31 downto 16) <= ps_dout(15 downto 0);
+			elsif ps_addr = ADDR_DDS_POFF_BPSK_5_LOW then
+				dds_poff_bpsk_ps_5(15 downto 0) <= ps_dout(15 downto 0);
 			end if;
 		end if;
 	end if;
@@ -5782,8 +5816,10 @@ begin
 		dds_poff_bpsk_ps_6 <= (others => '0');
 	elsif clk_128M'event and clk_128M = '1' then
 		if ps_cen = '0' and ps_wen = '0' then
-			if ps_addr = ADDR_DDS_POFF_BPSK_6 then
-				dds_poff_bpsk_ps_6 <= ps_dout;
+			if ps_addr = ADDR_DDS_POFF_BPSK_6_HIGH then
+				dds_poff_bpsk_ps_6(31 downto 16) <= ps_dout(15 downto 0);
+			elsif ps_addr = ADDR_DDS_POFF_BPSK_6_LOW then
+				dds_poff_bpsk_ps_6(15 downto 0) <= ps_dout(15 downto 0);
 			end if;
 		end if;
 	end if;
@@ -5796,8 +5832,10 @@ begin
 		dds_poff_bpsk_ps_7 <= (others => '0');
 	elsif clk_128M'event and clk_128M = '1' then
 		if ps_cen = '0' and ps_wen = '0' then
-			if ps_addr = ADDR_DDS_POFF_BPSK_7 then
-				dds_poff_bpsk_ps_7 <= ps_dout;
+			if ps_addr = ADDR_DDS_POFF_BPSK_7_HIGH then
+				dds_poff_bpsk_ps_7(31 downto 16) <= ps_dout(15 downto 0);
+			elsif ps_addr = ADDR_DDS_POFF_BPSK_7_LOW then
+				dds_poff_bpsk_ps_7(15 downto 0) <= ps_dout(15 downto 0);
 			end if;
 		end if;
 	end if;
@@ -5810,8 +5848,10 @@ begin
 		dds_poff_qpsk_ps_0 <= (others => '0');
 	elsif clk_128M'event and clk_128M = '1' then
 		if ps_cen = '0' and ps_wen = '0' then
-			if ps_addr = ADDR_DDS_POFF_QPSK_0 then
-				dds_poff_qpsk_ps_0 <= ps_dout;
+			if ps_addr = ADDR_DDS_POFF_QPSK_0_HIGH then
+				dds_poff_qpsk_ps_0(31 downto 16) <= ps_dout(15 downto 0);
+			elsif ps_addr = ADDR_DDS_POFF_QPSK_0_LOW then
+				dds_poff_qpsk_ps_0(15 downto 0) <= ps_dout(15 downto 0);
 			end if;
 		end if;
 	end if;
@@ -5824,8 +5864,10 @@ begin
 		dds_poff_qpsk_ps_1 <= (others => '0');
 	elsif clk_128M'event and clk_128M = '1' then
 		if ps_cen = '0' and ps_wen = '0' then
-			if ps_addr = ADDR_DDS_POFF_QPSK_1 then
-				dds_poff_qpsk_ps_1 <= ps_dout;
+			if ps_addr = ADDR_DDS_POFF_QPSK_1_HIGH then
+				dds_poff_qpsk_ps_1(31 downto 16) <= ps_dout(15 downto 0);
+			elsif ps_addr = ADDR_DDS_POFF_QPSK_1_LOW then
+				dds_poff_qpsk_ps_1(15 downto 0) <= ps_dout(15 downto 0);
 			end if;
 		end if;
 	end if;
@@ -5838,8 +5880,10 @@ begin
 		dds_poff_qpsk_ps_2 <= (others => '0');
 	elsif clk_128M'event and clk_128M = '1' then
 		if ps_cen = '0' and ps_wen = '0' then
-			if ps_addr = ADDR_DDS_POFF_QPSK_2 then
-				dds_poff_qpsk_ps_2 <= ps_dout;
+			if ps_addr = ADDR_DDS_POFF_QPSK_2_HIGH then
+				dds_poff_qpsk_ps_2(31 downto 16) <= ps_dout(15 downto 0);
+			elsif ps_addr = ADDR_DDS_POFF_QPSK_2_LOW then
+				dds_poff_qpsk_ps_2(15 downto 0) <= ps_dout(15 downto 0);
 			end if;
 		end if;
 	end if;
@@ -5852,8 +5896,10 @@ begin
 		dds_poff_qpsk_ps_3 <= (others => '0');
 	elsif clk_128M'event and clk_128M = '1' then
 		if ps_cen = '0' and ps_wen = '0' then
-			if ps_addr = ADDR_DDS_POFF_QPSK_3 then
-				dds_poff_qpsk_ps_3 <= ps_dout;
+			if ps_addr = ADDR_DDS_POFF_QPSK_3_HIGH then
+				dds_poff_qpsk_ps_3(31 downto 16) <= ps_dout(15 downto 0);
+			elsif ps_addr = ADDR_DDS_POFF_QPSK_3_LOW then
+				dds_poff_qpsk_ps_3(15 downto 0) <= ps_dout(15 downto 0);
 			end if;
 		end if;
 	end if;
@@ -5866,8 +5912,10 @@ begin
 		dds_poff_qpsk_ps_4 <= (others => '0');
 	elsif clk_128M'event and clk_128M = '1' then
 		if ps_cen = '0' and ps_wen = '0' then
-			if ps_addr = ADDR_DDS_POFF_QPSK_4 then
-				dds_poff_qpsk_ps_4 <= ps_dout;
+			if ps_addr = ADDR_DDS_POFF_QPSK_4_HIGH then
+				dds_poff_qpsk_ps_4(31 downto 16) <= ps_dout(15 downto 0);
+			elsif ps_addr = ADDR_DDS_POFF_QPSK_4_LOW then
+				dds_poff_qpsk_ps_4(15 downto 0) <= ps_dout(15 downto 0);
 			end if;
 		end if;
 	end if;
@@ -5880,8 +5928,10 @@ begin
 		dds_poff_qpsk_ps_5 <= (others => '0');
 	elsif clk_128M'event and clk_128M = '1' then
 		if ps_cen = '0' and ps_wen = '0' then
-			if ps_addr = ADDR_DDS_POFF_QPSK_5 then
-				dds_poff_qpsk_ps_5 <= ps_dout;
+			if ps_addr = ADDR_DDS_POFF_QPSK_5_HIGH then
+				dds_poff_qpsk_ps_5(31 downto 16) <= ps_dout(15 downto 0);
+			elsif ps_addr = ADDR_DDS_POFF_QPSK_5_LOW then
+				dds_poff_qpsk_ps_5(15 downto 0) <= ps_dout(15 downto 0);
 			end if;
 		end if;
 	end if;
@@ -5894,8 +5944,10 @@ begin
 		dds_poff_qpsk_ps_6 <= (others => '0');
 	elsif clk_128M'event and clk_128M = '1' then
 		if ps_cen = '0' and ps_wen = '0' then
-			if ps_addr = ADDR_DDS_POFF_QPSK_6 then
-				dds_poff_qpsk_ps_6 <= ps_dout;
+			if ps_addr = ADDR_DDS_POFF_QPSK_6_HIGH then
+				dds_poff_qpsk_ps_6(31 downto 16) <= ps_dout(15 downto 0);
+			elsif ps_addr = ADDR_DDS_POFF_QPSK_6_LOW then
+				dds_poff_qpsk_ps_6(15 downto 0) <= ps_dout(15 downto 0);
 			end if;
 		end if;
 	end if;
@@ -5908,8 +5960,10 @@ begin
 		dds_poff_qpsk_ps_7 <= (others => '0');
 	elsif clk_128M'event and clk_128M = '1' then
 		if ps_cen = '0' and ps_wen = '0' then
-			if ps_addr = ADDR_DDS_POFF_QPSK_7 then
-				dds_poff_qpsk_ps_7 <= ps_dout;
+			if ps_addr = ADDR_DDS_POFF_QPSK_7_HIGH then
+				dds_poff_qpsk_ps_7(31 downto 16) <= ps_dout(15 downto 0);
+			elsif ps_addr = ADDR_DDS_POFF_QPSK_7_LOW then
+				dds_poff_qpsk_ps_7(15 downto 0) <= ps_dout(15 downto 0);
 			end if;
 		end if;
 	end if;

@@ -25,25 +25,29 @@ static void dds_set_frequency(u16 pinc_addr, u16 poff_base, double freq_point)
     printf("frequency point : %lf MHz \r\n", freq_point);
 
     double fs = DDS_CLOCK_MHZ * (1e+6);
-    double data = 65536.0 * freq_point * (1e+6) / fs;   /* 相位增量（LSB），负频时为负 */
+    double data = 4294967296.0 * freq_point * (1e+6) / fs;   /* 2^32 归一化，满量程对应 2^32 */
 
     int  i;
-    long inc, poff;
+    long long inc, poff;    /* 32 位字放不进 long（Zynq 上 long 是 32 位），必须用 64 位中间量 */
 
     emc_write(DDS_REG_RESET, 0);    /* dds 复位 */
 
-    /* 频率增量 */
-    inc = (data >= 0.0) ? (long)(data + 0.5) : (long)(data - 0.5);  /* 四舍五入 */
-    emc_write(pinc_addr, (u16)((unsigned long)inc & 0xFFFFUL));     /* mod 2^16 回绕成补码 */
-    printf("write pinc : 0x%x \r\n", (unsigned)inc & 0xFFFF);
+    /* 频率控制字：32 位，按高/低 16 位分两次写 */
+    inc = (data >= 0.0) ? (long long)(data + 0.5) : (long long)(data - 0.5);  /* 四舍五入 */
+    inc &= 0xFFFFFFFFLL;                                      /* mod 2^32 回绕 */
+    emc_write(pinc_addr,            (u16)((inc >> 16) & 0xFFFFLL));   /* 高 16 位 */
+    emc_write((u16)(pinc_addr + 2), (u16)(inc & 0xFFFFLL));           /* 低 16 位 */
+    printf("write pinc : 0x%08lx \r\n", (unsigned long)inc);
 
-    /* 各通道相位偏移 */
+    /* 各通道相位偏移：同样 32 位，每路步长 4（高 16 位在 +0，低 16 位在 +2） */
     for (i = 0; i < DDS_PARALLEL_NUM; i++)
     {
-        poff = (data >= 0.0) ? (long)(data*i/(double)DDS_PARALLEL_NUM + 0.5)
-                             : (long)(data*i/(double)DDS_PARALLEL_NUM - 0.5);  /* 四舍五入 */
-        emc_write((u16)(poff_base + 2 * i), (u16)((unsigned long)poff & 0xFFFFUL));
-        printf("write poff[%d] : 0x%x \r\n", i, (unsigned)poff & 0xFFFF);
+        poff = (data >= 0.0) ? (long long)(data*i/(double)DDS_PARALLEL_NUM + 0.5)
+                             : (long long)(data*i/(double)DDS_PARALLEL_NUM - 0.5);  /* 四舍五入 */
+        poff &= 0xFFFFFFFFLL;
+        emc_write((u16)(poff_base + 4 * i),     (u16)((poff >> 16) & 0xFFFFLL));
+        emc_write((u16)(poff_base + 4 * i + 2), (u16)(poff & 0xFFFFLL));
+        printf("write poff[%d] : 0x%08lx \r\n", i, (unsigned long)poff);
     }
 
     emc_write(DDS_REG_RESET, 1);    /* 解除 dds 复位 */

@@ -24,8 +24,8 @@ module bpsk(
         input clk, rst_n, ram_en,
         input bpsk_en,
         input rate_sel,              // 0 = 450 kHz symbol rate, 1 = 400 kHz
-        input [15:0] dds_pinc,
-        input [127:0] dds_poff,
+        input [31:0] dds_pinc,
+        input [255:0] dds_poff,
         input dds_rstn,
         input signed [15:0] atten,   // Q1.14: 0x4000 = 1.0 (0 dB), 0x2000 = 0.5 (-6 dB)
         input w_en,

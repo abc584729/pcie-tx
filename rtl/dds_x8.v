@@ -22,8 +22,8 @@
 
 module dds_x8(
       input clk, rst_n,
-      input [15:0] pinc,
-      input [127:0] poff,
+      input [31:0] pinc,
+      input [255:0] poff,
       output [127:0] dds_i,
       output [127:0] dds_q
     );
@@ -35,7 +35,7 @@ module dds_x8(
       .aclk(clk),                                 // input wire aclk
       .aresetn(rst_n),                            // input wire aresetn
       .s_axis_phase_tvalid(1'b1),                 // input wire s_axis_phase_tvalid
-      .s_axis_phase_tdata({poff[15:0], pinc}),    // input wire [31 : 0] s_axis_phase_tdata
+      .s_axis_phase_tdata({poff[31:0], pinc}),    // input wire [63 : 0] s_axis_phase_tdata
       .m_axis_data_tvalid(),                      // output wire m_axis_data_tvalid
       .m_axis_data_tdata(dout_0)                  // output wire [31 : 0] m_axis_data_tdata
       );
@@ -44,7 +44,7 @@ module dds_x8(
       .aclk(clk),
       .aresetn(rst_n),
       .s_axis_phase_tvalid(1'b1),
-      .s_axis_phase_tdata({poff[31:16], pinc}),
+      .s_axis_phase_tdata({poff[63:32], pinc}),
       .m_axis_data_tvalid(),
       .m_axis_data_tdata(dout_1)
       );
@@ -53,7 +53,7 @@ module dds_x8(
       .aclk(clk),
       .aresetn(rst_n),
       .s_axis_phase_tvalid(1'b1),
-      .s_axis_phase_tdata({poff[47:32], pinc}),
+      .s_axis_phase_tdata({poff[95:64], pinc}),
       .m_axis_data_tvalid(),
       .m_axis_data_tdata(dout_2)
       );
@@ -62,7 +62,7 @@ module dds_x8(
       .aclk(clk),
       .aresetn(rst_n),
       .s_axis_phase_tvalid(1'b1),
-      .s_axis_phase_tdata({poff[63:48], pinc}),
+      .s_axis_phase_tdata({poff[127:96], pinc}),
       .m_axis_data_tvalid(),
       .m_axis_data_tdata(dout_3)
       );
@@ -71,7 +71,7 @@ module dds_x8(
       .aclk(clk),
       .aresetn(rst_n),
       .s_axis_phase_tvalid(1'b1),
-      .s_axis_phase_tdata({poff[79:64], pinc}),
+      .s_axis_phase_tdata({poff[159:128], pinc}),
       .m_axis_data_tvalid(),
       .m_axis_data_tdata(dout_4)
       );
@@ -80,7 +80,7 @@ module dds_x8(
       .aclk(clk),
       .aresetn(rst_n),
       .s_axis_phase_tvalid(1'b1),
-      .s_axis_phase_tdata({poff[95:80], pinc}),
+      .s_axis_phase_tdata({poff[191:160], pinc}),
       .m_axis_data_tvalid(),
       .m_axis_data_tdata(dout_5)
       );
@@ -89,7 +89,7 @@ module dds_x8(
       .aclk(clk),
       .aresetn(rst_n),
       .s_axis_phase_tvalid(1'b1),
-      .s_axis_phase_tdata({poff[111:96], pinc}),
+      .s_axis_phase_tdata({poff[223:192], pinc}),
       .m_axis_data_tvalid(),
       .m_axis_data_tdata(dout_6)
       );
@@ -98,7 +98,7 @@ module dds_x8(
       .aclk(clk),
       .aresetn(rst_n),
       .s_axis_phase_tvalid(1'b1),
-      .s_axis_phase_tdata({poff[127:112], pinc}),
+      .s_axis_phase_tdata({poff[255:224], pinc}),
       .m_axis_data_tvalid(),
       .m_axis_data_tdata(dout_7)
       );

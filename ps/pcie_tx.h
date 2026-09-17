@@ -21,10 +21,10 @@
 
 /* DDS 中频配置寄存器 */
 #define DDS_REG_RESET           (0x800)    /* dds 复位：0 复位，1 解除复位 */
-#define DDS_REG_PINC_BPSK       (0x802)    /* bpsk 频率增量 */
-#define DDS_REG_POFF_BPSK_BASE  (0x804)    /* bpsk 相位偏移基址（步长 2，共 8 路） */
-#define DDS_REG_PINC_QPSK       (0x902)    /* qpsk 频率增量 */
-#define DDS_REG_POFF_QPSK_BASE  (0x904)    /* qpsk 相位偏移基址（步长 2，共 8 路） */
+#define DDS_REG_PINC_BPSK       (0x802)    /* bpsk 频率增量高 16 位（0x804 = 低 16 位） */
+#define DDS_REG_POFF_BPSK_BASE  (0x806)    /* bpsk 相位偏移基址（步长 4，共 8 路；+2 为低 16 位） */
+#define DDS_REG_PINC_QPSK       (0x902)    /* qpsk 频率增量高 16 位（0x904 = 低 16 位） */
+#define DDS_REG_POFF_QPSK_BASE  (0x906)    /* qpsk 相位偏移基址（步长 4，共 8 路；+2 为低 16 位） */
 
 /* DDS 参数 */
 #define DDS_PARALLEL_NUM        (8)        /* 并行 DDS 路数 */
