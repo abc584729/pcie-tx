@@ -29,7 +29,7 @@ module bpsk(
         input dds_rstn,
         input signed [15:0] atten,   // Q1.14: 0x4000 = 1.0 (0 dB), 0x2000 = 0.5 (-6 dB)
         input w_en,
-        input [14:0] w_addr,
+        input [17:0] w_addr,
         input [15:0] w_data,
         output [127:0] sig_i, sig_q
     );

@@ -27,9 +27,9 @@ module tb_bpsk_rate;
   integer last_flag;
   integer period_450k, period_400k;
 
-  // Write port of the table: fill 16'hAAAA over the whole 32768-word table.
+  // Write port of the table: fill 16'hAAAA over the whole 262144-word table.
   reg         u_wen = 0;
-  reg  [14:0] u_waddr = 0;
+  reg  [17:0] u_waddr = 0;
   reg  [15:0] u_wdata = 0;
 
   bpsk u_dut (
@@ -83,8 +83,8 @@ module tb_bpsk_rate;
     rst_n = 0;
     repeat (4) @(posedge clk);
     @(negedge clk) rst_n = 1;
-    for (i = 0; i < 32768; i = i + 1) begin
-      @(negedge clk); u_wen = 1; u_waddr = i[14:0]; u_wdata = 16'hAAAA;
+    for (i = 0; i < 262144; i = i + 1) begin
+      @(negedge clk); u_wen = 1; u_waddr = i[17:0]; u_wdata = 16'hAAAA;
       @(posedge clk);
     end
     @(negedge clk); u_wen = 0; u_wdata = 0;

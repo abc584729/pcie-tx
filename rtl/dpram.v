@@ -12,7 +12,8 @@
 // Description:
 //   Asymmetric dual-port RAM: 16-bit write / READ_WIDTH-bit read.
 //   Single clock (sync). DEPTH words x 16 bits - the size is set by the
-//   instantiation (bpsk_ram / qpsk_ram use 32768 x 16 = 512 Kbit).
+//   instantiation: bpsk_ram uses 262144 x 16 = 4 Mbit (512 KB), qpsk_ram
+//   uses 32768 x 16 = 512 Kbit (64 KB).
 //   The contents are written entirely through the write port; there is no
 //   preload, so the PS must fill the whole table before the reader is
 //   enabled (tx_init() does this with TX_REG_RAM_EN held at 0).

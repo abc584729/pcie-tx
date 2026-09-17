@@ -118,31 +118,31 @@ void set_rate_sel(u8 sel)
 /*
  * bpsk 符号表 RAM 写
  * data : 符号表数据（每字 16bit，写地址由硬件自动递增）
- * len  : 写入字数（应与 RAM 深度 32 一致）
+ * len  : 写入字数（BPSK 262144 / QPSK 32768，应与对应 RAM 深度一致）
  */
-void write_bpsk_ram(const u16 *data, u16 len)
+void write_bpsk_ram(const u16 *data, unsigned long len)
 {
-    u16 i;
+    unsigned long i;
     for (i = 0; i < len; i++)
     {
         emc_write(TX_REG_RAM_WDATA_BPSK, data[i]);
     }
-    printf("bpsk ram write done: %d words\r\n", len);
+    printf("bpsk ram write done: %lu words\r\n", len);
 }
 
 /*
  * qpsk 符号表 RAM 写
  * data : 符号表数据（每字 16bit，写地址由硬件自动递增）
- * len  : 写入字数（应与 RAM 深度 32 一致）
+ * len  : 写入字数（BPSK 262144 / QPSK 32768，应与对应 RAM 深度一致）
  */
-void write_qpsk_ram(const u16 *data, u16 len)
+void write_qpsk_ram(const u16 *data, unsigned long len)
 {
-    u16 i;
+    unsigned long i;
     for (i = 0; i < len; i++)
     {
         emc_write(TX_REG_RAM_WDATA_QPSK, data[i]);
     }
-    printf("qpsk ram write done: %d words\r\n", len);
+    printf("qpsk ram write done: %lu words\r\n", len);
 }
 
 /* 发射初始化 */

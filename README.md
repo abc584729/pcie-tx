@@ -140,10 +140,17 @@ pcie-tx/
 
 ### 3.1 修改 RAM 大小
 
-老张要求 BPSK 在 450k 速率下至少连续发 1 s。450k × 1 s 向上取到 2 的幂 = 2^19 = 524288
-个符号，BPSK 每符号 1 bit，即 **512 Kbit** = 32768 字 × 16 bit（原 32 字 × 16 bit，
-见 `rtl/bpsk_ram.v`）。改后 BPSK 连发 **1.165 s**；QPSK 每符号 2 bit，共 262144 个
-符号，4.5m 下 58.2 ms。
+最初的要求是 BPSK 在 450k 速率下至少连续发 1 s：450k × 1 s 向上取到 2 的幂 = 2^19 =
+524288 个符号，BPSK 每符号 1 bit，即 512 Kbit = 32768 字 × 16 bit。**现 BPSK 表加大到
+512 KB**（262144 字 × 16 bit = 4 Mbit），是上一次的 8 倍，见 `rtl/bpsk_ram.v`：
+
+| 表 | 字数 | 容量 | 分片 | 连发时长 |
+|----|------|------|------|----------|
+| BPSK | 262144 (2^18) | 4 Mbit = 512 KB | 512 包 | 450k: **9.32 s**，400k: **10.49 s** |
+| QPSK | 32768 (2^15) | 512 Kbit = 64 KB | 64 包 | 4.5m: 58.2 ms，6.667m: 39.3 ms |
+
+> QPSK 这次**没有改**，仍是 32768 字 / 15 位写地址。两张表的字数、写地址位宽、分片数
+> 现在**都不一样**，改动时别连带把 QPSK 一起改了。
 
 表内容不再固化、也不由板上生成，改为**上位机经网口写入**（`rtl/dpram.v` 删去
 `$readmemb` 预载，`mem/ram.mem` 已删除）。
@@ -153,21 +160,22 @@ pcie-tx/
 **配置 RAM 和初始化发射是解耦的，顺序是先灌表、后初始化：**
 
 ```bash
-python gen_symbol_table.py -o symbols.bin                          # 1. 生成随机表
-python send_symbol_table.py --table symbols.bin --table-sel bpsk   # 2. 灌 BPSK 表
-python send_symbol_table.py --table symbols.bin --table-sel qpsk   #    灌 QPSK 表
-python send_tx_init.py --bpsk-freq 100 --qpsk-freq 200             # 3. 开播
+python gen_symbol_table.py -o symbols.bin --table-sel bpsk            # 1. 生成随机表
+python send_symbol_table.py --table symbols.bin --table-sel bpsk      # 2. 灌 BPSK 表
+python gen_symbol_table.py -o symbols.bin --table-sel qpsk            #    换 QPSK 再生成
+python send_symbol_table.py --table symbols.bin --table-sel qpsk      #    灌 QPSK 表
+python send_tx_init.py --bpsk-freq 100 --qpsk-freq 200                # 3. 开播
 ```
 
 | 脚本 | 干什么 |
 |------|--------|
-| `ps/gen_symbol_table.py` | 生成随机符号表文件（`.bin`，32768 字，种子可复现） |
-| `ps/send_symbol_table.py` | 发 case 134：整表分 **64 包**（每包 512 字 = 1028 字节）；`--table-sel` 必填，一次一张 |
+| `ps/gen_symbol_table.py` | 生成随机符号表文件（`.bin`，大小任意、**上限 512 KB**：`--table-sel` 满表 / `--words` / `--bytes`，支持 `512K` 后缀，种子可复现） |
+| `ps/send_symbol_table.py` | 发 case 134：整表分片、每包 512 字 = 1028 字节，BPSK **512 包** / QPSK **64 包**；`--table-sel` 必填，一次一张 |
 | `ps/send_tx_init.py` | 发 case 133：频点 / 衰减 / 使能，然后**开播** |
 
 灌表只写 RAM 不发；`tx_init()` 才是开播 —— 复位读指针到 0、应用频点衰减、开 RAM 读
-使能。所以开播时写指针和读指针都是 0，表必然从第一个字开始播。板上把 64 包**全部收进
-缓冲、到齐才写 RAM**，因此丢包或中断只是表不落地，RAM 一个字都不动，重跑一遍即可。
+使能。所以开播时写指针和读指针都是 0，表必然从第一个字开始播。板上把整表所有包**全部
+收进缓冲、到齐才写 RAM**，因此丢包或中断只是表不落地，RAM 一个字都不动，重跑一遍即可。
 
 case 134 包格式：
 
@@ -175,11 +183,32 @@ case 134 包格式：
 |------|------|------|
 | 0 | 命令 = 134 | u8 |
 | 1 | `table_sel`：0 = BPSK，1 = QPSK | u8 |
-| 2..3 | `word_offset`，小端 u16，取 0/512/…/32256 | u16 |
+| 2..3 | `chunk_idx`，小端 u16，**包序号**（BPSK 0…511，QPSK 0…63） | u16 |
 | 4..1027 | 512 个字 | 1024 B |
 
-表文件必须是 **`.bin`，恰好 65536 字节**（小端 u16 = 32768 字）。字的含义：BPSK 每字
-16 个符号、bit0 在前；QPSK 每字 8 个符号，每符号 2 bit，低位是 I、高位是 Q。
+> 这个字段是**包序号**，不是字偏移 —— BPSK 最后一片的字偏移是 261632，u16 装不下。
+> 板上按 `chunk_idx × 512` 自己换算。包长仍是 1028 字节。
+
+表文件是 **`.bin`**（小端 u16），满表长度随 `--table-sel`：BPSK **524288 字节**
+（262144 字），QPSK **65536 字节**（32768 字）。**短于满表就补 0** —— 剩余部分填零字，
+所以短文件可以用来只发一段前缀，后面自然停在零符号上；补了多少会打印出来，不闷声补。
+**长于满表直接报错**，不截断。字的含义：BPSK 每字 16 个符号、bit0 在前；QPSK 每字
+8 个符号，每符号 2 bit，低位是 I、高位是 Q。
+
+> 既然短文件现在会被接受，"把 64 KB 的 QPSK 表发给 BPSK"就不再报错，而是补 87.5% 的
+> 零。脚本对**文件长度恰好等于另一张表**这种情况会打 WARNING 提示，但不会拦住 —— 真要
+> 发一段前缀时它只是噪音，看 `padding` 那行即可。
+
+生成任意长度（配合上面的补 0，就是"只发前 N 个字，后面停在零符号"）：
+
+```bash
+python gen_symbol_table.py -o prefix.bin --words 1000     # 1000 字 = 2000 字节
+python gen_symbol_table.py -o part.bin --bytes 256K       # 256 KiB = 131072 字
+```
+
+`--words` / `--bytes` / `--table-sel` 三选一，`K`/`M`/`G` 后缀按 1024 进制。**上限 512 KB**
+（524288 字节 = 262144 字，即 BPSK 满表）—— 再长也没地方发，所以直接报错退出，不会写出
+一个发不出去的文件。
 
 > **使能开关**：`ps/top.vhd:4755-4765` 把 PS 与 VIO 对发射链路的控制二选一，由
 > `probe_out7`（`tx_sel_vio_ps`）决定，上电默认 0 = 选 VIO，此时 PS 写的频点 / 衰减 /
@@ -190,12 +219,14 @@ case 134 包格式：
 
 | 指针 | 位置 | 计数对象 | 总数 | 位宽 |
 |------|------|----------|------|------|
-| PS 写地址 | `ps/arm_interface_write_1.vhd` | 16 bit 字 | 32768 | 15 |
-| BPSK 读指针 | `rtl/bpsk_ram.v` | 1 bit 符号 | 524288 | 19 |
+| BPSK PS 写地址 | `ps/arm_interface_write_1.vhd` | 16 bit 字 | 262144 | 18 |
+| QPSK PS 写地址 | `ps/arm_interface_write_1.vhd` | 16 bit 字 | 32768 | 15 |
+| BPSK 读指针 | `rtl/bpsk_ram.v` | 1 bit 符号 | 4194304 | 22 |
 | QPSK 读指针 | `rtl/qpsk_ram.v` | 2 bit 符号 | 262144 | 18 |
 
-写地址计数器靠位宽自动回绕，**必须恰好 15 位**，多一位会变成 65536 回绕、后半段越界。
-整表 32768 字正好一整圈，所以每次灌表后指针必回 0。
+写地址计数器靠位宽自动回绕，**必须恰好是上表的位数**（BPSK 18、QPSK 15），多一位回绕
+点就翻倍、后半段越界。整表字数正好一整圈，所以每次灌表后指针必回 0。BPSK 和 QPSK 是
+两个独立计数器，可以各自不同宽。
 
 ### 3.2 新增一对速率
 

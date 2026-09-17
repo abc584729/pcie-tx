@@ -1,15 +1,21 @@
 #include "AdhocSoft.h"
 #include "pcie_tx.h"
 
-/* 符号表分片上传（case 134）：一张表 32768 字，分 64 包，每包 512 字 = 1028 字节 */
+/* 符号表分片上传（case 134）：每包 512 字 = 1028 字节。
+ * BPSK 一张表 262144 字（512 KB）分 512 包，QPSK 一张表 32768 字（64 KB）分 64 包。
+ * 包头 2..3 是包序号（不是字偏移），总包数随 table_sel 变。 */
 #define TX_TABLE_CHUNK_WORDS (512)
-#define TX_TABLE_WORDS       (32768)
-#define TX_TABLE_CHUNKS      (TX_TABLE_WORDS / TX_TABLE_CHUNK_WORDS)
+#define TX_TABLE_WORDS_BPSK  (262144)
+#define TX_TABLE_WORDS_QPSK  (32768)
+#define TX_TABLE_CHUNKS_BPSK (TX_TABLE_WORDS_BPSK / TX_TABLE_CHUNK_WORDS)
+#define TX_TABLE_CHUNKS_QPSK (TX_TABLE_WORDS_QPSK / TX_TABLE_CHUNK_WORDS)
+#define TX_TABLE_WORDS_MAX   TX_TABLE_WORDS_BPSK
+#define TX_TABLE_CHUNKS_MAX  TX_TABLE_CHUNKS_BPSK
 #define TX_TABLE_PKT_LEN     (4 + 2 * TX_TABLE_CHUNK_WORDS)
 
-/* 整表收齐再写 RAM：64 KB 的 .bss，外加 64 包的到齐标记 */
-static u16 tx_table_buf[TX_TABLE_WORDS];
-static u8  tx_table_got[TX_TABLE_CHUNKS];
+/* 缓冲区，不写 RAM（512 KB → .bss）：两张表共用的填充区 + 512 包的到齐标记 */
+static u16 tx_table_buf[TX_TABLE_WORDS_MAX];
+static u8  tx_table_got[TX_TABLE_CHUNKS_MAX];
 static U16 tx_table_cnt;
 
 char localIPDef[20] = "192.168.1.10";
@@ -1427,8 +1433,9 @@ void ProcCmd(unsigned char *pBuf, U16 len)
 			break;
 		case 134:
 		{
-			U16 word_offset;
 			U16 chunk_idx;
+			U16 n_chunks;
+			U32 word_offset;
 			int k;
 
 			/* 超长包会被 lwip_read 静默截断，短包尾部是 memset 过的 0，
@@ -1440,17 +1447,18 @@ void ProcCmd(unsigned char *pBuf, U16 len)
 				break;
 			}
 
-			word_offset = (U16)(pBuf[2] | ((U16)pBuf[3] << 8));
-			if (pBuf[1] > 1 || word_offset >= TX_TABLE_WORDS ||
-			    (word_offset % TX_TABLE_CHUNK_WORDS) != 0)
+			/* 包头 2..3 是包序号；表不同，总包数不同 */
+			n_chunks  = (pBuf[1] == 0) ? TX_TABLE_CHUNKS_BPSK : TX_TABLE_CHUNKS_QPSK;
+			chunk_idx = (U16)(pBuf[2] | ((U16)pBuf[3] << 8));
+			if (pBuf[1] > 1 || chunk_idx >= n_chunks)
 			{
-				printf("tx table: bad sel/offset %u/%u, dropped\r\n",
-				       pBuf[1], word_offset);
+				printf("tx table: bad sel/chunk %u/%u, dropped\r\n",
+				       pBuf[1], chunk_idx);
 				break;
 			}
-			chunk_idx = word_offset / TX_TABLE_CHUNK_WORDS;
+			word_offset = (U32)chunk_idx * TX_TABLE_CHUNK_WORDS;
 
-			/* 表头开一张新表：丢掉上一张没收完的残料 */
+			/* 包头一包开新表：丢掉上一张没收完的残包 */
 			if (chunk_idx == 0)
 			{
 				memset(tx_table_got, 0, sizeof(tx_table_got));
@@ -1471,19 +1479,19 @@ void ProcCmd(unsigned char *pBuf, U16 len)
 			}
 
 			printf("tx table: sel %u chunk %u/%u got %u/%u\r\n",
-			       pBuf[1], chunk_idx, TX_TABLE_CHUNKS - 1,
-			       tx_table_cnt, TX_TABLE_CHUNKS);
+			       pBuf[1], chunk_idx, n_chunks - 1,
+			       tx_table_cnt, n_chunks);
 
-			/* 64 包到齐，整表一次性落地 */
-			if (tx_table_cnt == TX_TABLE_CHUNKS)
+			/* 整表到齐，一次性落地 */
+			if (tx_table_cnt == n_chunks)
 			{
 				if (pBuf[1] == 0)
 				{
-					write_bpsk_ram(tx_table_buf, TX_TABLE_WORDS);
+					write_bpsk_ram(tx_table_buf, TX_TABLE_WORDS_BPSK);
 				}
 				else
 				{
-					write_qpsk_ram(tx_table_buf, TX_TABLE_WORDS);
+					write_qpsk_ram(tx_table_buf, TX_TABLE_WORDS_QPSK);
 				}
 				tx_table_cnt = 0;
 				memset(tx_table_got, 0, sizeof(tx_table_got));

@@ -47,11 +47,11 @@ void set_rate_sel(unsigned char sel);
 
 /* ================= RAM 符号表写函数 ================= */
 
-/* bpsk 符号表 RAM 写（写地址由硬件自动递增） */
-void write_bpsk_ram(const unsigned short *data, unsigned short len);
+/* bpsk 符号表 RAM 写（写地址由硬件自动递增，整表 262144 字 = 512 KB） */
+void write_bpsk_ram(const unsigned short *data, unsigned long len);
 
-/* qpsk 符号表 RAM 写（写地址由硬件自动递增） */
-void write_qpsk_ram(const unsigned short *data, unsigned short len);
+/* qpsk 符号表 RAM 写（写地址由硬件自动递增，整表 32768 字 = 64 KB） */
+void write_qpsk_ram(const unsigned short *data, unsigned long len);
 
 /* 发射初始化 */
 void tx_init(void);

@@ -32,7 +32,7 @@ module tx_top(
         input [255:0] dds_poff_bpsk,
         input [255:0] dds_poff_qpsk,
         input        ram_w_en_bpsk,
-        input [14:0] ram_w_addr_bpsk,
+        input [17:0] ram_w_addr_bpsk,
         input [15:0] ram_w_data_bpsk,
         input        ram_w_en_qpsk,
         input [14:0] ram_w_addr_qpsk,
