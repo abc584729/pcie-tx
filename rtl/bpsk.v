@@ -31,7 +31,10 @@ module bpsk(
         input w_en,
         input [17:0] w_addr,
         input [15:0] w_data,
-        output [127:0] sig_i, sig_q
+        input [22:0] sym_num,        // burst length in symbols (single_shot only)
+        input single_shot,           // 0 = cyclic (default), 1 = stop after sym_num
+        output [127:0] sig_i, sig_q,
+        output sig_valid             // 8 lanes' complex-multiplier valids OR'ed into one
     );
 
     wire bit, bit_valid;
@@ -43,6 +46,8 @@ module bpsk(
         .w_addr        (w_addr),
         .w_data        (w_data),
         .rd_en         (ram_en),
+        .sym_num       (sym_num),
+        .single_shot   (single_shot),
         .rdata         (bit),
         .rdata_valid   (bit_valid)
     );
@@ -78,13 +83,15 @@ module bpsk(
     wire        din_400_valid = rate_sel ? pulse_atten_valid : 1'b0;
 
     wire [127:0] sig_450, sig_400;
+    wire         sig_450_valid, sig_400_valid;
 
     upsamping_450k u_upsampling_450k(
         .clk         (clk),
         .rst_n       (rst_n),
         .din         (din_450),
         .din_valid   (din_450_valid),
-        .sig         (sig_450)
+        .sig         (sig_450),
+        .sig_valid   (sig_450_valid)
     );
 
     upsamping_400k u_upsampling_400k(
@@ -92,10 +99,16 @@ module bpsk(
         .rst_n       (rst_n),
         .din         (din_400),
         .din_valid   (din_400_valid),
-        .sig         (sig_400)
+        .sig         (sig_400),
+        .sig_valid   (sig_400_valid)
     );
 
     wire [127:0] sig = rate_sel ? sig_400 : sig_450;
+    // Same mux as `sig`: the deselected chain is fed din_valid = 0, so its
+    // chain valid is 0 as well.  In steady state the last polyphase filter's
+    // ce_out is 1 every clock, i.e. after the pipeline fills this is 1'b1 --
+    // the same value the multipliers used to be hard-wired to.
+    wire         sig_vld = rate_sel ? sig_400_valid : sig_450_valid;
 
     wire [127:0] dds_i, dds_q;
     dds_x8 u_dds_x8(
@@ -118,92 +131,94 @@ module bpsk(
 
     wire [31:0] cmpy_dout_0, cmpy_dout_1, cmpy_dout_2, cmpy_dout_3;
     wire [31:0] cmpy_dout_4, cmpy_dout_5, cmpy_dout_6, cmpy_dout_7;
+    wire        cmpy_vld_0, cmpy_vld_1, cmpy_vld_2, cmpy_vld_3;
+    wire        cmpy_vld_4, cmpy_vld_5, cmpy_vld_6, cmpy_vld_7;
 
     cmpy_0 u_cmpy_0(
         .aclk(clk),                                          // input wire aclk
         .aresetn(rst_n),                                     // input wire aresetn
-        .s_axis_a_tvalid(1'b1),                              // input wire s_axis_a_tvalid
+        .s_axis_a_tvalid(sig_vld),                           // input wire s_axis_a_tvalid
         .s_axis_a_tdata({16'd0, i_0}),                       // input wire [31 : 0] s_axis_a_tdata
         .s_axis_b_tvalid(1'b1),                              // input wire s_axis_b_tvalid
         .s_axis_b_tdata({dds_q[15:0], dds_i[15:0]}),         // input wire [31 : 0] s_axis_b_tdata
-        .m_axis_dout_tvalid(),                               // output wire m_axis_dout_tvalid
+        .m_axis_dout_tvalid(cmpy_vld_0),                     // output wire m_axis_dout_tvalid
         .m_axis_dout_tdata(cmpy_dout_0)                      // output wire [31 : 0] m_axis_dout_tdata
     );
 
     cmpy_0 u_cmpy_1(
         .aclk(clk),
         .aresetn(rst_n),
-        .s_axis_a_tvalid(1'b1),
+        .s_axis_a_tvalid(sig_vld),
         .s_axis_a_tdata({16'd0, i_1}),
         .s_axis_b_tvalid(1'b1),
         .s_axis_b_tdata({dds_q[31:16], dds_i[31:16]}),
-        .m_axis_dout_tvalid(),
+        .m_axis_dout_tvalid(cmpy_vld_1),
         .m_axis_dout_tdata(cmpy_dout_1)
     );
 
     cmpy_0 u_cmpy_2(
         .aclk(clk),
         .aresetn(rst_n),
-        .s_axis_a_tvalid(1'b1),
+        .s_axis_a_tvalid(sig_vld),
         .s_axis_a_tdata({16'd0, i_2}),
         .s_axis_b_tvalid(1'b1),
         .s_axis_b_tdata({dds_q[47:32], dds_i[47:32]}),
-        .m_axis_dout_tvalid(),
+        .m_axis_dout_tvalid(cmpy_vld_2),
         .m_axis_dout_tdata(cmpy_dout_2)
     );
 
     cmpy_0 u_cmpy_3(
         .aclk(clk),
         .aresetn(rst_n),
-        .s_axis_a_tvalid(1'b1),
+        .s_axis_a_tvalid(sig_vld),
         .s_axis_a_tdata({16'd0, i_3}),
         .s_axis_b_tvalid(1'b1),
         .s_axis_b_tdata({dds_q[63:48], dds_i[63:48]}),
-        .m_axis_dout_tvalid(),
+        .m_axis_dout_tvalid(cmpy_vld_3),
         .m_axis_dout_tdata(cmpy_dout_3)
     );
 
     cmpy_0 u_cmpy_4(
         .aclk(clk),
         .aresetn(rst_n),
-        .s_axis_a_tvalid(1'b1),
+        .s_axis_a_tvalid(sig_vld),
         .s_axis_a_tdata({16'd0, i_4}),
         .s_axis_b_tvalid(1'b1),
         .s_axis_b_tdata({dds_q[79:64], dds_i[79:64]}),
-        .m_axis_dout_tvalid(),
+        .m_axis_dout_tvalid(cmpy_vld_4),
         .m_axis_dout_tdata(cmpy_dout_4)
     );
 
     cmpy_0 u_cmpy_5(
         .aclk(clk),
         .aresetn(rst_n),
-        .s_axis_a_tvalid(1'b1),
+        .s_axis_a_tvalid(sig_vld),
         .s_axis_a_tdata({16'd0, i_5}),
         .s_axis_b_tvalid(1'b1),
         .s_axis_b_tdata({dds_q[95:80], dds_i[95:80]}),
-        .m_axis_dout_tvalid(),
+        .m_axis_dout_tvalid(cmpy_vld_5),
         .m_axis_dout_tdata(cmpy_dout_5)
     );
 
     cmpy_0 u_cmpy_6(
         .aclk(clk),
         .aresetn(rst_n),
-        .s_axis_a_tvalid(1'b1),
+        .s_axis_a_tvalid(sig_vld),
         .s_axis_a_tdata({16'd0, i_6}),
         .s_axis_b_tvalid(1'b1),
         .s_axis_b_tdata({dds_q[111:96], dds_i[111:96]}),
-        .m_axis_dout_tvalid(),
+        .m_axis_dout_tvalid(cmpy_vld_6),
         .m_axis_dout_tdata(cmpy_dout_6)
     );
 
     cmpy_0 u_cmpy_7(
         .aclk(clk),
         .aresetn(rst_n),
-        .s_axis_a_tvalid(1'b1),
+        .s_axis_a_tvalid(sig_vld),
         .s_axis_a_tdata({16'd0, i_7}),
         .s_axis_b_tvalid(1'b1),
         .s_axis_b_tdata({dds_q[127:112], dds_i[127:112]}),
-        .m_axis_dout_tvalid(),
+        .m_axis_dout_tvalid(cmpy_vld_7),
         .m_axis_dout_tdata(cmpy_dout_7)
     );
 
@@ -229,5 +244,13 @@ module bpsk(
     // Gate outputs by bpsk_en: zero when disabled
     assign sig_i = bpsk_en ? sig_i_int : 128'd0;
     assign sig_q = bpsk_en ? sig_q_int : 128'd0;
+
+    // The 8 multipliers share aclk / aresetn / s_axis_a_tvalid and are the same
+    // IP, so their output valids are aligned; OR them into one and gate it the
+    // same way as the data.
+    wire cmpy_vld = cmpy_vld_0 | cmpy_vld_1 | cmpy_vld_2 | cmpy_vld_3 |
+                    cmpy_vld_4 | cmpy_vld_5 | cmpy_vld_6 | cmpy_vld_7;
+
+    assign sig_valid = bpsk_en ? cmpy_vld : 1'b0;
 
 endmodule

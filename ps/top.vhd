@@ -363,6 +363,12 @@ signal		ram_w_data_bpsk_ps  :   STD_LOGIC_VECTOR(15 downto 0);
 signal		ram_w_en_qpsk_ps    :   STD_LOGIC;
 signal		ram_w_addr_qpsk_ps  :   STD_LOGIC_VECTOR(14 downto 0);
 signal		ram_w_data_qpsk_ps  :   STD_LOGIC_VECTOR(15 downto 0);
+----    bpsk 循环发/单次发    ----
+-- sym_num 只在 single_shot=1 时有用；single_shot 是模式位，和 rate_sel 一样走 vio/ps mux，
+-- 保证 VIO 模式（上电默认）下行为与改动前逐拍一致。
+signal		bpsk_sym_num_ps      :   STD_LOGIC_VECTOR(22 downto 0);
+signal		bpsk_single_shot_ps  :   STD_LOGIC;
+signal		bpsk_single_shot_mux :   STD_LOGIC;
 
 -- vio/ps 选择信号（0:使用 vio_tx，1:使用 PS）
 signal      tx_sel_vio_ps : STD_LOGIC_VECTOR(0 downto 0);
@@ -402,6 +408,11 @@ COMPONENT vio_tx
 END COMPONENT;
 
 signal		iq :   STD_LOGIC_VECTOR(255 downto 0);   
+-- bpsk/qpsk 并行链数据有效（8 路复乘 valid 相或），供顶层观察/使用
+signal		bpsk_sig_valid :   STD_LOGIC;   
+signal		qpsk_sig_valid :   STD_LOGIC;   
+-- 送 DAC 的 axis tvalid：两条链的数据有效相或（各自被 bpsk_en/qpsk_en 门控）
+signal		dac_sig_valid :   STD_LOGIC;   
 COMPONENT tx_top
   PORT (
     clk : IN STD_LOGIC;
@@ -423,7 +434,11 @@ COMPONENT tx_top
     ram_w_en_qpsk   : in STD_LOGIC;
     ram_w_addr_qpsk : in STD_LOGIC_VECTOR(14 DOWNTO 0);
     ram_w_data_qpsk : in STD_LOGIC_VECTOR(15 DOWNTO 0);
-    iq: OUT STD_LOGIC_VECTOR(255 DOWNTO 0)
+    bpsk_sym_num    : in STD_LOGIC_VECTOR(22 DOWNTO 0);
+    bpsk_single_shot: in STD_LOGIC;
+    iq: OUT STD_LOGIC_VECTOR(255 DOWNTO 0);
+    bpsk_sig_valid: OUT STD_LOGIC;
+    qpsk_sig_valid: OUT STD_LOGIC
   );
  
 END COMPONENT;
@@ -1326,7 +1341,9 @@ component ps_interface_1 is
         ram_w_data_bpsk_ps  : out STD_LOGIC_VECTOR(15 downto 0);
         ram_w_en_qpsk_ps    : out STD_LOGIC;
         ram_w_addr_qpsk_ps  : out STD_LOGIC_VECTOR(14 downto 0);
-        ram_w_data_qpsk_ps  : out STD_LOGIC_VECTOR(15 downto 0)
+        ram_w_data_qpsk_ps  : out STD_LOGIC_VECTOR(15 downto 0);
+        bpsk_sym_num_ps     : out STD_LOGIC_VECTOR(22 downto 0);
+        bpsk_single_shot_ps : out STD_LOGIC
   );
 end component;
 
@@ -3300,7 +3317,8 @@ U_0: design_1_wrapper
     
     s20_axis_tdata_0  => s20_axis_tdata_0,
     s20_axis_tready_0 => s20_axis_tready_0,
-    s20_axis_tvalid_0 => '1',
+    -- DAC 数据有效：由 bpsk/qpsk 两条链的数据有效相或驱动（原来钉死 '1'）
+    s20_axis_tvalid_0 => dac_sig_valid,
     s2_axis_aclk_0    => clk_128M,
     s2_axis_aresetn_0 => pl_rsten,
     
@@ -3903,7 +3921,9 @@ Port map (
         ram_w_data_bpsk_ps  => ram_w_data_bpsk_ps,
         ram_w_en_qpsk_ps    => ram_w_en_qpsk_ps,
         ram_w_addr_qpsk_ps  => ram_w_addr_qpsk_ps,
-        ram_w_data_qpsk_ps  => ram_w_data_qpsk_ps
+        ram_w_data_qpsk_ps  => ram_w_data_qpsk_ps,
+        bpsk_sym_num_ps     => bpsk_sym_num_ps,
+        bpsk_single_shot_ps => bpsk_single_shot_ps
 );
 
 ---------------灯开关---------------------
@@ -4320,6 +4340,9 @@ PA_switch_delay_400ns <= sig_delay(count_pa_delay-1);
 
 -- tx_top 256位 iq（RFDC 格式 {q7,i7,...,q0,i0}）-> DAC tile230 s20_axis 接口
 s20_axis_tdata_0 <= iq;
+-- DAC 数据有效 = bpsk / qpsk 两条并行链各自的数据有效相或
+-- （单发跑完、各级滤波器里的数据泄放干净后自动落低）
+dac_sig_valid <= bpsk_sig_valid or qpsk_sig_valid;
 
 
 
@@ -4772,6 +4795,7 @@ dds_poff_bpsk_mux <= dds_poff_bpsk     when tx_sel_vio_ps(0) = '0' else dds_poff
 dds_poff_qpsk_mux <= dds_poff_qpsk     when tx_sel_vio_ps(0) = '0' else dds_poff_qpsk_ps;
 atten_bpsk_mux <= atten_bpsk     when tx_sel_vio_ps(0) = '0' else atten_bpsk_ps;
 atten_qpsk_mux <= atten_qpsk     when tx_sel_vio_ps(0) = '0' else atten_qpsk_ps;
+bpsk_single_shot_mux <= '0'          when tx_sel_vio_ps(0) = '0' else bpsk_single_shot_ps;
  
  u_tx_top: tx_top
   PORT MAP (
@@ -4794,7 +4818,11 @@ atten_qpsk_mux <= atten_qpsk     when tx_sel_vio_ps(0) = '0' else atten_qpsk_ps;
     ram_w_en_qpsk   => ram_w_en_qpsk_ps,
     ram_w_addr_qpsk => ram_w_addr_qpsk_ps,
     ram_w_data_qpsk => ram_w_data_qpsk_ps,
-    iq            => iq
+    bpsk_sym_num       => bpsk_sym_num_ps,
+    bpsk_single_shot   => bpsk_single_shot_mux,
+    iq            => iq,
+    bpsk_sig_valid => bpsk_sig_valid,
+    qpsk_sig_valid => qpsk_sig_valid
   );
  
  u_ila_tx : ila_tx

@@ -30,7 +30,8 @@ module qpsk(
         input w_en,
         input [14:0] w_addr,
         input [15:0] w_data,
-        output [127:0] sig_i, sig_q
+        output [127:0] sig_i, sig_q,
+        output sig_valid             // 8 lanes' complex-multiplier valids OR'ed into one
     );
 
     wire reset = ~rst_n;
@@ -86,6 +87,7 @@ module qpsk(
     wire        din_6667_valid = rate_sel ? pulse_atten_valid : 1'b0;
 
     wire [127:0] sig_i_4500, sig_q_4500, sig_i_6667, sig_q_6667;
+    wire         sig_4500_valid, sig_6667_valid;
 
     upsamping_4500k u_upsamping_4500k(
         .clk         (clk),
@@ -94,7 +96,8 @@ module qpsk(
         .din_q       (din_4500_q),
         .din_valid   (din_4500_valid),
         .sig_i       (sig_i_4500),
-        .sig_q       (sig_q_4500)
+        .sig_q       (sig_q_4500),
+        .sig_valid   (sig_4500_valid)
     );
 
     upsamping_6667k u_upsamping_6667k(
@@ -104,11 +107,15 @@ module qpsk(
         .din_q       (din_6667_q),
         .din_valid   (din_6667_valid),
         .sig_i       (sig_i_6667),
-        .sig_q       (sig_q_6667)
+        .sig_q       (sig_q_6667),
+        .sig_valid   (sig_6667_valid)
     );
 
     wire [127:0] sig_i_par = rate_sel ? sig_i_6667 : sig_i_4500;
     wire [127:0] sig_q_par = rate_sel ? sig_q_6667 : sig_q_4500;
+    // Same mux as the data: the deselected chain is fed din_valid = 0, so its
+    // data valid stays low as well.
+    wire         sig_vld   = rate_sel ? sig_6667_valid : sig_4500_valid;
 
     wire [127:0] dds_i, dds_q;
     dds_x8 u_dds_x8(
@@ -140,92 +147,94 @@ module qpsk(
 
     wire [31:0] cmpy_dout_0, cmpy_dout_1, cmpy_dout_2, cmpy_dout_3;
     wire [31:0] cmpy_dout_4, cmpy_dout_5, cmpy_dout_6, cmpy_dout_7;
+    wire        cmpy_vld_0, cmpy_vld_1, cmpy_vld_2, cmpy_vld_3;
+    wire        cmpy_vld_4, cmpy_vld_5, cmpy_vld_6, cmpy_vld_7;
 
     cmpy_0 u_cmpy_0(
         .aclk(clk),                                          // input wire aclk
         .aresetn(rst_n),                                     // input wire aresetn
-        .s_axis_a_tvalid(1'b1),                              // input wire s_axis_a_tvalid
+        .s_axis_a_tvalid(sig_vld),                           // input wire s_axis_a_tvalid
         .s_axis_a_tdata({q_0, i_0}),                         // input wire [31 : 0] s_axis_a_tdata
         .s_axis_b_tvalid(1'b1),                              // input wire s_axis_b_tvalid
         .s_axis_b_tdata({dds_q[15:0], dds_i[15:0]}),         // input wire [31 : 0] s_axis_b_tdata
-        .m_axis_dout_tvalid(),                               // output wire m_axis_dout_tvalid
+        .m_axis_dout_tvalid(cmpy_vld_0),                     // output wire m_axis_dout_tvalid
         .m_axis_dout_tdata(cmpy_dout_0)                      // output wire [31 : 0] m_axis_dout_tdata
     );
 
     cmpy_0 u_cmpy_1(
         .aclk(clk),
         .aresetn(rst_n),
-        .s_axis_a_tvalid(1'b1),
+        .s_axis_a_tvalid(sig_vld),
         .s_axis_a_tdata({q_1, i_1}),
         .s_axis_b_tvalid(1'b1),
         .s_axis_b_tdata({dds_q[31:16], dds_i[31:16]}),
-        .m_axis_dout_tvalid(),
+        .m_axis_dout_tvalid(cmpy_vld_1),
         .m_axis_dout_tdata(cmpy_dout_1)
     );
 
     cmpy_0 u_cmpy_2(
         .aclk(clk),
         .aresetn(rst_n),
-        .s_axis_a_tvalid(1'b1),
+        .s_axis_a_tvalid(sig_vld),
         .s_axis_a_tdata({q_2, i_2}),
         .s_axis_b_tvalid(1'b1),
         .s_axis_b_tdata({dds_q[47:32], dds_i[47:32]}),
-        .m_axis_dout_tvalid(),
+        .m_axis_dout_tvalid(cmpy_vld_2),
         .m_axis_dout_tdata(cmpy_dout_2)
     );
 
     cmpy_0 u_cmpy_3(
         .aclk(clk),
         .aresetn(rst_n),
-        .s_axis_a_tvalid(1'b1),
+        .s_axis_a_tvalid(sig_vld),
         .s_axis_a_tdata({q_3, i_3}),
         .s_axis_b_tvalid(1'b1),
         .s_axis_b_tdata({dds_q[63:48], dds_i[63:48]}),
-        .m_axis_dout_tvalid(),
+        .m_axis_dout_tvalid(cmpy_vld_3),
         .m_axis_dout_tdata(cmpy_dout_3)
     );
 
     cmpy_0 u_cmpy_4(
         .aclk(clk),
         .aresetn(rst_n),
-        .s_axis_a_tvalid(1'b1),
+        .s_axis_a_tvalid(sig_vld),
         .s_axis_a_tdata({q_4, i_4}),
         .s_axis_b_tvalid(1'b1),
         .s_axis_b_tdata({dds_q[79:64], dds_i[79:64]}),
-        .m_axis_dout_tvalid(),
+        .m_axis_dout_tvalid(cmpy_vld_4),
         .m_axis_dout_tdata(cmpy_dout_4)
     );
 
     cmpy_0 u_cmpy_5(
         .aclk(clk),
         .aresetn(rst_n),
-        .s_axis_a_tvalid(1'b1),
+        .s_axis_a_tvalid(sig_vld),
         .s_axis_a_tdata({q_5, i_5}),
         .s_axis_b_tvalid(1'b1),
         .s_axis_b_tdata({dds_q[95:80], dds_i[95:80]}),
-        .m_axis_dout_tvalid(),
+        .m_axis_dout_tvalid(cmpy_vld_5),
         .m_axis_dout_tdata(cmpy_dout_5)
     );
 
     cmpy_0 u_cmpy_6(
         .aclk(clk),
         .aresetn(rst_n),
-        .s_axis_a_tvalid(1'b1),
+        .s_axis_a_tvalid(sig_vld),
         .s_axis_a_tdata({q_6, i_6}),
         .s_axis_b_tvalid(1'b1),
         .s_axis_b_tdata({dds_q[111:96], dds_i[111:96]}),
-        .m_axis_dout_tvalid(),
+        .m_axis_dout_tvalid(cmpy_vld_6),
         .m_axis_dout_tdata(cmpy_dout_6)
     );
 
     cmpy_0 u_cmpy_7(
         .aclk(clk),
         .aresetn(rst_n),
-        .s_axis_a_tvalid(1'b1),
+        .s_axis_a_tvalid(sig_vld),
         .s_axis_a_tdata({q_7, i_7}),
         .s_axis_b_tvalid(1'b1),
         .s_axis_b_tdata({dds_q[127:112], dds_i[127:112]}),
-        .m_axis_dout_tvalid(),
+        .m_axis_dout_tvalid(cmpy_vld_7),
         .m_axis_dout_tdata(cmpy_dout_7)
     );
 
@@ -251,5 +260,13 @@ module qpsk(
     // Gate outputs by qpsk_en: zero when disabled
     assign sig_i = qpsk_en ? sig_i_int : 128'd0;
     assign sig_q = qpsk_en ? sig_q_int : 128'd0;
+
+    // The 8 multipliers share aclk / aresetn / s_axis_a_tvalid and are the same
+    // IP, so their output valids are aligned; OR them into one and gate it the
+    // same way as the data.
+    wire cmpy_vld = cmpy_vld_0 | cmpy_vld_1 | cmpy_vld_2 | cmpy_vld_3 |
+                    cmpy_vld_4 | cmpy_vld_5 | cmpy_vld_6 | cmpy_vld_7;
+
+    assign sig_valid = qpsk_en ? cmpy_vld : 1'b0;
 
 endmodule

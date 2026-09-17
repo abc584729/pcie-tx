@@ -34,10 +34,14 @@ module tx_top(
         input        ram_w_en_bpsk,
         input [17:0] ram_w_addr_bpsk,
         input [15:0] ram_w_data_bpsk,
+        input [22:0] bpsk_sym_num,     // BPSK burst length in symbols
+        input        bpsk_single_shot, // 0 = cyclic (default), 1 = burst
         input        ram_w_en_qpsk,
         input [14:0] ram_w_addr_qpsk,
         input [15:0] ram_w_data_qpsk,
-        output [255:0] iq
+        output [255:0] iq,
+        output bpsk_sig_valid,       // BPSK parallel-chain data valid (8 cmpy valids OR'ed)
+        output qpsk_sig_valid        // QPSK parallel-chain data valid (8 cmpy valids OR'ed)
     );
 
     wire [127:0] i_0, q_0;
@@ -54,8 +58,11 @@ module tx_top(
         .w_en          (ram_w_en_bpsk),
         .w_addr        (ram_w_addr_bpsk),
         .w_data        (ram_w_data_bpsk),
+        .sym_num       (bpsk_sym_num),
+        .single_shot   (bpsk_single_shot),
         .sig_i         (i_0),
-        .sig_q         (q_0)
+        .sig_q         (q_0),
+        .sig_valid     (bpsk_sig_valid)
     );
 
     wire [127:0] i_1, q_1;
@@ -73,7 +80,8 @@ module tx_top(
         .w_addr        (ram_w_addr_qpsk),
         .w_data        (ram_w_data_qpsk),
         .sig_i         (i_1),
-        .sig_q         (q_1)
+        .sig_q         (q_1),
+        .sig_valid     (qpsk_sig_valid)
     );
 
     add u_add(

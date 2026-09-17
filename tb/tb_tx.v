@@ -34,9 +34,25 @@ module tb_tx(
     wire [255:0] iq;
     wire [127:0] i;
     wire [127:0] q;
-
+    wire bpsk_sig_valid, qpsk_sig_valid;
+    // What top.vhd puts on the RFDC DAC axis tvalid.
+    wire dac_valid = bpsk_sig_valid | qpsk_sig_valid;
 
     integer fp;
+
+    // End-to-end data-valid check, on the same boundary the DAC sees: once the
+    // pipelines have filled, no iq word may be non-zero while the DAC tvalid is
+    // low (that would mean real data is being muted away).
+    integer t_dut = 0;
+    integer vloss = 0;          // iq non-zero with tvalid low
+    integer vhigh = 0;          // clocks with tvalid high (steady state check)
+    always @(posedge clk) begin
+        t_dut = t_dut + 1;
+        if (rst_n && (t_dut > 6000)) begin
+            if ((iq != 256'd0) && !dac_valid) vloss = vloss + 1;
+            if (dac_valid) vhigh = vhigh + 1;
+        end
+    end
 
     initial begin
         clk = 0;
@@ -65,6 +81,16 @@ module tb_tx(
         ram_en = 1;
         # 1000000;
         $fclose(fp);
+        // Both chains enabled and free running here, so the DAC tvalid must be
+        // high once the pipelines have filled, and no data may slip past a low
+        // tvalid.
+        $display("DAC tvalid: high %0d clks, iq non-zero with tvalid low: %0d", vhigh, vloss);
+        if (vloss != 0)
+            $display("FAIL: iq data present while the DAC tvalid was low");
+        else if (vhigh == 0)
+            $display("FAIL: DAC tvalid never asserted in cyclic mode");
+        else
+            $display("PASS: DAC tvalid tracks the data");
         $display("Simulation done, file closed successfully.");
         $stop;
     end
@@ -90,7 +116,11 @@ module tb_tx(
         .dds_poff_qpsk  (dds_poff_qpsk),
         .atten_bpsk (atten_bpsk),
         .atten_qpsk (atten_qpsk),
-        .iq             (iq)
+        .bpsk_sym_num      (23'd0),   // cyclic mode
+        .bpsk_single_shot  (1'b0),
+        .iq             (iq),
+        .bpsk_sig_valid (bpsk_sig_valid),
+        .qpsk_sig_valid (qpsk_sig_valid)
     );
 
     // tx_top iq packing is {q7,i7,q6,i6,...,q0,i0}, 16 bit per lane

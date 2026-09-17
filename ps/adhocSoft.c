@@ -85,6 +85,9 @@ double atten_qpsk = 0;
 u8 ctrl_bpsk = 1;
 u8 ctrl_qpsk = 1;
 u8 tx_rate_sel = 0;    /* 速率选择：0 -> bpsk 450k / qpsk 4.5M，1 -> bpsk 400k / qpsk 6.667M */
+u8  tx_bpsk_single_shot = 0;    /* bpsk 发射模式：0 循环发（默认），1 单次发 */
+u32 tx_bpsk_sym_num = 0;        /* bpsk 单次发要发的符号数，0 = 不发。case 133 里给的是数据文件大小(kB)，
+                                 * 按 BPSK 每符号 1 bit 换算而来（kB x 1024 x 8）；上限 23 位 = 8388607 */
 //20260902
 
 #if 1
@@ -1424,12 +1427,37 @@ void ProcCmd(unsigned char *pBuf, U16 len)
 			memcpy(&fre_qpsk, &pBuf[19], 8);
 			memcpy(&atten_qpsk, &pBuf[27], 8);
 			tx_rate_sel = (len >= 36) ? (u8)(pBuf[35] & 0x1) : 0;
+			/* 循环发/单次发：45 字节以上的包才有这几个字段，老包按循环发 */
+			tx_bpsk_single_shot = (len >= 45) ? (u8)(pBuf[36] & 0x1) : 0;
+			/* 0x25 起 8 字节 double：数据文件大小，单位 kB（1024 进制，和文件大小
+			 * 脚本的 K/M/G 后缀一致）。BPSK 每符号 1 bit，所以文件有多少 bit
+			 * 就发多少个符号，正好是 bpsk_ram 的 sym_num。 */
+			{
+				double size_kb = 0.0;
+
+				if (len >= 45)
+					memcpy(&size_kb, &pBuf[37], 8);
+
+				if (size_kb < 0.0)
+					size_kb = 0.0;
+				if (size_kb > 8388607.0 / 8192.0)    /* 23 位符号数上限，约 1024 kB */
+				{
+					printf("tx bpsk burst: %.6f kB too big (max %.3f kB), clamped\r\n",
+					       size_kb, 8388607.0 / 8192.0);
+					size_kb = 8388607.0 / 8192.0;
+				}
+				tx_bpsk_sym_num = (u32)(size_kb * 8192.0 + 0.5);    /* kB -> 字节 -> bit */
+				printf("tx bpsk burst: size = %.6f kB -> %d bits (symbols)\r\n",
+				       size_kb, (int)tx_bpsk_sym_num);
+			}
 
 			tx_init();
 
 			printf("bpsk set as: enable = %d, dds_f = %f, attenuation = %f.\r\n", ctrl_bpsk, fre_bpsk, atten_bpsk);
 			printf("qpsk set as: enable = %d, dds_f = %f, attenuation = %f.\r\n", ctrl_qpsk, fre_qpsk, atten_qpsk);
 			printf("tx rate select = %d.\r\n", tx_rate_sel);
+			printf("tx bpsk burst: sym_num = %d, single_shot = %d.\r\n",
+			       (int)tx_bpsk_sym_num, (int)tx_bpsk_single_shot);
 			break;
 		case 134:
 		{

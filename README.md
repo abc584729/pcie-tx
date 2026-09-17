@@ -23,7 +23,9 @@ pcie-tx/
 │   └── dpram.v                          # 双口 RAM
 │
 ├── tb/
-│   └── tb_tx.v                          # 发射链路仿真 testbench
+│   ├── tb_tx.v                          # 发射链路仿真 testbench
+│   ├── tb_bpsk_rate.v                   # BPSK 双速率 / 链路选择检查
+│   └── tb_bpsk_burst.v                  # BPSK 循环发 / 单次发检查
 ├── tcl/
 │   ├── ila.tcl                          # ILA 调试脚本
 │   └── vio.tcl                          # VIO 调试脚本
@@ -171,7 +173,7 @@ python send_tx_init.py --bpsk-freq 100 --qpsk-freq 200                # 3. 开�
 |------|--------|
 | `ps/gen_symbol_table.py` | 生成随机符号表文件（`.bin`，大小任意、**上限 512 KB**：`--table-sel` 满表 / `--words` / `--bytes`，支持 `512K` 后缀，种子可复现） |
 | `ps/send_symbol_table.py` | 发 case 134：整表分片、每包 512 字 = 1028 字节，BPSK **512 包** / QPSK **64 包**；`--table-sel` 必填，一次一张 |
-| `ps/send_tx_init.py` | 发 case 133：频点 / 衰减 / 使能，然后**开播** |
+| `ps/send_tx_init.py` | 发 case 133：频点 / 衰减 / 使能 / 速率 / **循环发或单次发**（`--single`、`--size`，见 §3.3），然后**开播** |
 
 灌表只写 RAM 不发；`tx_init()` 才是开播 —— 复位读指针到 0、应用频点衰减、开 RAM 读
 使能。所以开播时写指针和读指针都是 0，表必然从第一个字开始播。板上把整表所有包**全部
@@ -210,9 +212,10 @@ python gen_symbol_table.py -o part.bin --bytes 256K       # 256 KiB = 131072 字
 （524288 字节 = 262144 字，即 BPSK 满表）—— 再长也没地方发，所以直接报错退出，不会写出
 一个发不出去的文件。
 
-> **使能开关**：`ps/top.vhd:4755-4765` 把 PS 与 VIO 对发射链路的控制二选一，由
+> **使能开关**：`ps/top.vhd:4774-4784` 把 PS 与 VIO 对发射链路的控制二选一，由
 > `probe_out7`（`tx_sel_vio_ps`）决定，上电默认 0 = 选 VIO，此时 PS 写的频点 / 衰减 /
-> 使能**全被忽略**；而 RAM 写端口绕过这个 mux，症状是"表灌进去了、就是不发射"。
+> 使能**全被忽略**；而 RAM 写端口（以及 §3.3 的符号数 `sym_num`）绕过这个 mux，症状是
+> "表灌进去了、就是不发射"。
 > `tcl/vio.tcl` 现在默认置 1 交给 PS，**每次下完 bitstream 都要重跑**。
 
 指针位宽：
@@ -222,11 +225,16 @@ python gen_symbol_table.py -o part.bin --bytes 256K       # 256 KiB = 131072 字
 | BPSK PS 写地址 | `ps/arm_interface_write_1.vhd` | 16 bit 字 | 262144 | 18 |
 | QPSK PS 写地址 | `ps/arm_interface_write_1.vhd` | 16 bit 字 | 32768 | 15 |
 | BPSK 读指针 | `rtl/bpsk_ram.v` | 1 bit 符号 | 4194304 | 22 |
+| BPSK 单次发符号计数 | `rtl/bpsk_ram.v` | 1 bit 符号 | 4194304 | 23 |
 | QPSK 读指针 | `rtl/qpsk_ram.v` | 2 bit 符号 | 262144 | 18 |
 
 写地址计数器靠位宽自动回绕，**必须恰好是上表的位数**（BPSK 18、QPSK 15），多一位回绕
 点就翻倍、后半段越界。整表字数正好一整圈，所以每次灌表后指针必回 0。BPSK 和 QPSK 是
 两个独立计数器，可以各自不同宽。
+
+> 符号计数（§3.3）**不受读指针回绕影响**：它数的是"发出去几个符号"，所以必须比读指针
+> 宽一位 —— 整表 4194304 个符号，最后一个的序号是 4194303 = 2^23-1，22 位在最后一次
+> 比较时会溢出，故取 23 位。寄存器里也只放得下 23 位（高 7 位 + 低 16 位）。
 
 ### 3.2 新增一对速率
 
@@ -245,6 +253,207 @@ python gen_symbol_table.py -o part.bin --bytes 256K       # 256 KiB = 131072 字
 | QPSK | 6.857m | ≈ 27 | 9 × 3 | 改为 9 倍成形滤波 + 3 倍上采样，实际速率 6.667m |
 
 两个新速率的滤波器参数见第四节。
+
+### 3.3 BPSK 循环发 / 单次发
+
+原来只要 `RAM_EN` 为高，BPSK 读指针就一路自增到表尾回绕、**永远循环发整张表**（450k
+下一圈 9.32 s）。现在多两个选项：**循环发**（默认，行为与改动前逐拍一致）和**单次发**
+（发满指定符号数就停，射频自然泄放到 0）。
+
+改在 `rtl/bpsk_ram.v`：新增 `sym_num[22:0]`（要发的符号数）和 `single_shot` 两个输入，
+对 `rdata_valid` 计数，发满 `sym_num` 个之后把送进 `dpram` 的读脉冲门控掉 —— 既拉低了
+`rdata_valid`，也顺带把读指针冻在停止位置（不让它继续空转整圈）。**QPSK 没有这个功能**，
+`rtl/qpsk_ram.v` 一个字没动。
+
+寄存器（`ps/pcie_tx.h`）：
+
+| 地址 | 名称 | 含义 |
+|------|------|------|
+| 0x712 | `TX_REG_BPSK_SYM_NUM_L` | `sym_num[15:0]` |
+| 0x714 | `TX_REG_BPSK_SYM_NUM_H` | `sym_num[22:16]`，高 7 位，其余忽略 |
+| 0x716 | `TX_REG_BPSK_SINGLE_SHOT` | bit0：0 = 循环发（默认），1 = 单次发 |
+
+符号数与读指针是**两个独立计数器**：符号数 23 位（整表 4194304 个符号，见 §3.1 的位宽
+表），读指针仍是 22 位。组合起来就是一张真值表：
+
+| `single_shot` | `sym_num` | 行为 |
+|---------------|-----------|------|
+| 0（上电默认） | 任意 | 循环发，`sym_num` 无意义 —— 与改动前完全一致 |
+| 1 | 0 | 一个符号都不发（也可当软件"立刻停"用） |
+| 1 | N ≥ 1 | 恰好发 N 个符号，然后静默 |
+
+> `sym_num = 0` 特意定义成"不发"而不是"发 1 个"：寄存器复位就是 0，宁可是个一眼能看出
+> 来的空发，也不要"忘了写符号数就发出 2^23 个"。`sym_num` 大于表长（4194304）时整表重复。
+
+**上位机发射时序**
+
+case 133 包里直接带了这两个字段（追加在 `rate_sel` 之后，总长 36 → 45 字节），所以最省
+事的办法就是重发一次 case 133：
+
+```bash
+python send_tx_init.py --single 1 --size 256      # 发刚灌进去的那个 256 kB 文件
+python send_tx_init.py --single 1 --size full     # 发满整表（512 kB = 4194304 个符号）
+python send_tx_init.py --single 1 --size 1.953125 # 2000 字节的文件
+python send_tx_init.py --single 0                 # 回到循环发（默认）
+```
+
+**这里给的是"数据文件有多大"，不是符号数** —— 板上自己按 BPSK 每符号 1 bit 换算，所以
+"灌了多大就发多长"不用人工乘。case 133 新增的字段：
+
+| 偏移 | 字段 | 类型 |
+|------|------|------|
+| 36 | `bpsk_single_shot` | u8，0 = 循环发，1 = 单次发 |
+| 37..44 | `bpsk_size_kb` | double（8B，小端 IEEE-754），数据文件大小，**单位 kB（1024 进制）** |
+
+换算就一行（`ps/adhocSoft.c` case 133）：`sym_num = kB × 1024 × 8 = kB × 8192`。512 kB →
+524288 字节 → 4194304 bit = 4194304 个符号，正好是整表一圈；`gen_symbol_table.py` 的
+`--bytes 256K`（= 262144 字节）对应 `--size 256`。
+
+> kB 按 **1024** 算，和 `gen_symbol_table.py` 的 `K/M/G` 后缀、以及 §3.1 里"整表 512 KB"
+> 是同一套口径。单位是 kB 而不是字节，是因为正好能把 512 kB 的整表写成一个整数，读起来
+> 和 `--bytes` / 文件大小对得上。
+
+`--size` 收十进制、`K`/`M` 后缀或 `full`（= 512，整表）。因为字节数除以 1024 是 2 的幂
+缩放、double 能精确表示，所以**任何文件长度都换算得没有误差**（2000 字节 → 1.953125 kB
+→ 16000 bit，精确）。23 位符号计数器把上限卡在约 1024 kB，超了脚本直接报错；大于 512 kB
+（表长）会提示"表会重复"。老包仍然兼容：`adhocSoft.c` case 133 按长度补默认值（≤ 35
+字节 → `rate_sel` = 0；< 45 字节 → 循环发、size = 0），35/36 字节的老脚本照发不误。
+
+> 不带 `--single` / `--size` 重发一次 case 133，就是**回到循环发** —— 脚本的默认值和
+> `tx_init()` 里那份一样（都是 0）。所以"上次设了单次发、这次忘了带参数"不会把上一次的
+> 大小留下来，而是显式回到默认。
+
+它落到硬件就是下面这套寄存器时序（`tx_init()`）：
+
+```
+1. 灌表                  （已有的 case 134 流程，不变）
+2. 写 0x712 / 0x714      = 要发的符号数（0 = 不发）
+3. 写 0x716              = 1（单次发）/ 0（循环发）
+4. 脉冲 0x700：写 0 再写 1   ← 清读指针 rptr、符号计数器、done
+5. 写 0x702 = 1          ← 开始发；发满 sym_num 个符号后自己停
+```
+
+包里的两个字段在进 `tx_init()` 之前就解好了（`adhocSoft.c` 的 `tx_bpsk_single_shot` 和
+`tx_bpsk_sym_num` 全局量 —— 后者已经是换算完的 bit 数，和 `tx_rate_sel` 一个套路），
+第 4 步复位期间由
+`set_bpsk_burst()` 落到寄存器 —— 也就是第 2、3 步是在复位窗口里做的，不会踩到半字更新。
+
+要再发一次就重发一遍 case 133（或只重复 4–5 步）；改符号数就回到 2。**发完后再触发必须
+先脉冲 0x700** —— `done` 只由复位清，不脉冲复位的话再写 0x716 也不会重新开始（`done`
+还锁着）。
+
+> **写的顺序有讲究**：`sym_num` 是 23 位、分两个 16 位寄存器写，**不是原子操作**。如果
+> 在发射过程中写，中间那一瞬间的 `(旧高 << 16) | 新低` 可能正好等于"已发符号数 + 1"，
+> 把在发的这一串提前截断。所以约定**只在 `TX_REG_RESET = 0` 期间写符号数**（复位期间
+> 时钟被 hold、读脉冲根本不发，改参数绝对安全），`tx_init()` 就是在复位期间调
+> `set_bpsk_burst()` 的。`single_shot` 单个 16 位写，是原子的。
+
+`ps/top.vhd` 里这两根信号照 `ram_w_*` 的接法直连 `tx_top`（`sym_num` 绕过 VIO/PS mux，
+因为只有 PS 用得上），`single_shot` 则和 `rate_sel` 一样**走那个 mux** —— 这样 VIO 模式
+（上电默认）下它的值恒 0，行为与改动前完全一致，不会被上一次 PS 会话留下的 1 截断。
+因此**不需要重新生成 VIO IP**，也不需要动 BD（`top.vhd` 是手写顶层）。
+
+发完之后链路上没有残留载波：`bpsk_mapper` 在 `bit_valid` 为低时把 `pulse` 清 0，
+`zero_interpolator` 没样本时输出 0，所以最后一级抗镜像滤波器的冲击响应衰减完（几个
+µs）`iq` 就归零了，不需要去动 `bpsk_en`。另外这次复位**只清读指针、符号计数器和
+`done`，不清 RAM 里的表**（表只有重下 bitstream 或重新灌表才会变）；DDS 走的是另一个
+复位 `dds_rstn`(0x800)，所以突发之间**载波相位连续**，每次单次发的波形都一致。
+
+本地回归：`tb/tb_bpsk_burst.v`（只实例化 `bpsk_ram` + `dpram`，`iverilog` 就能跑）
+
+```bash
+iverilog -g2005 -o /tmp/tb_bpsk_burst.vvp \
+    tb/tb_bpsk_burst.v rtl/bpsk_ram.v rtl/dpram.v && vvp /tmp/tb_bpsk_burst.vvp
+```
+
+覆盖：循环发周期仍是 400/450 clk、单次发恰好 N 个（N = 0/1/3/5/4194304）、发完后读指针
+冻住、重触发仍是 N 个、门控期间分频器照常走。`tb_bpsk_rate.v` / `tb_tx.v` 在本机跑不了
+（缺 `cmpy_0` 等 Xilinx IP），只能保证端口接全，真正的回归要靠上面这个 TB 的循环模式用例。
+
+### 3.4 DAC 数据有效（axis tvalid）
+
+#### 问题：现有 `*_valid` 全是 `clk_enable` 的回声，不是数据有效
+
+生成滤波器（`rcos_filter` / `anti_imaging_*`）里的 `filter_out_valid` 是这么来的：
+
+```verilog
+ce_delay <= {ce_delay[63:0], 1'b1};              // 移进去的永远是个常数
+assign filter_out_valid = clk_enable & ce_delay[64];
+```
+
+它只回答"流水线走到第几拍了"，**跟输入有没有数据无关**；而 `clk_enable` 又是自由跑的
+（`zero_interpolator` 的 `y_valid = slot` 同样只看分频计数器、不看 `x_valid`）。于是链路
+越往后 `clk_enable` 越密，最后两级直接是每拍一次 —— 它们的 `clk_enable & ce_delay[N]`
+就退化成**恒 1**，永远不落。
+
+实测（喂一个 `din_valid` 脉冲后不再喂，观察 4000 拍）：
+
+| 级            | 有效位    | 频率    | 停喂之后 |
+|---------------|-----------|---------|----------|
+| `pad_8_valid` | 81 次 @2  | 1/50    | 照旧     |
+| `rcos_valid`  | 16 次 @3252 | 1/50  | 照旧     |
+| `pad_5_valid` | 401 次 @2 | 1/10    | 照旧     |
+| `s5_valid`    | 386 次 @152 | 1/10  | 照旧     |
+| `ce_out` / `s10_valid` | 3970 次 @33 | ≡1 | 恒 1，**永不落** |
+
+所以之前 DAC 的 `s20_axis_tvalid_0` 是钉死的 `'1'`——没有可用的数据有效可接。
+
+#### 做法：另做一条数据有效链（不动数据通路）
+
+- `zero_interpolator` 加一对端口 `x_data_valid` / `y_data_valid`：这一拍的数据是"真数据"
+  还是"插进去的零"。它和样本一起被 `pending` 捎带（和 `pending` 并排存一份、到 slot 那拍
+  和 `y` 一起打出去），所以和 `y` / `y_valid` **严格同拍**。原来的 `y_valid` 一个字没动
+  —— 它是下游 FIR 的 `clk_enable`，拿数据有效去门控它会把流水线卡死。
+- 每个上采样器里，每级 FIR 后面跟一个**窗口或归约**：把这级的输入数据有效按 `clk_enable`
+  移进一个移位寄存器，整寄存器的"或"就是这级的输出数据有效 —— 只要滤波器里还留有真数据，
+  它就为高。窗口深度 = **该滤波器抽头数 + 16**。
+
+  深度不能照抄滤波器自己的 `ce_delay`：生成的是**逐抽头流水**（每个抽头都带
+  `under_pipe`/`product_pipe`），实测冲激响应跨度比 `ce_delay` 长：
+
+  | 滤波器 | 抽头 | `ce_delay` 声称 | 实测冲激跨度 | 本设计窗口 |
+  |--------|------|-----------------|--------------|-----------|
+  | `rcos_filter` / `_iq`      | 64 | 65 | 73 | 80 |
+  | `rcos_400k`                | 72 | 73 | 82 | 88 |
+  | `anti_imaging_filter_5(_iq/_400k)` | 14/13 | 15/14 | 21 | 30 / 29 |
+  | `anti_imaging_filter_10(_400k)` | 26/25 | 27/26 | 34 | 42 / 41 |
+  | `anti_imaging_3_6667k`     | 7  | 7  | 13 | 23 |
+  | `anti_imaging_8_par*`      | —  | 4  | 6  | 20 |
+
+  余量是故意的：**窗口长了只是晚几百 ns 静音，短了会把真数据削掉**。
+- 最后一级的窗口输出就是各上采样器新引出的 `sig_valid`，往上：
+
+  `upsamping_*` → `bpsk.v` / `qpsk.v` 里做速率选择后送 8 路复乘器的 `s_axis_a_tvalid`
+  → 8 路 `m_axis_dout_tvalid` 相或 → 各自被 `bpsk_en` / `qpsk_en` 门控 → `tx_top` 引出
+  `bpsk_sig_valid` / `qpsk_sig_valid` → `top.vhd` 里相或成 `dac_sig_valid` → DAC 的
+  `s20_axis_tvalid_0`。
+
+#### 效果与代价
+
+- **单次发跑完，DAC 的 tvalid 会自己落下来**（各链在数据泄放干净后落低），不用去动
+  `bpsk_en`。循环发时恒为高，与改动前一致。
+- 纯 QPSK（`bpsk_en=0`）不会被静音：两条链的 valid 相或，各自被自己的使能门控。
+- **数据通路一拍没动**：`zero_interpolator` 与四个上采样器的输出做了改动前后 A/B 逐拍比对，
+  15200 拍 × 4 条链**完全相同**；复乘器 `tvalid` 从 `1'b1` 换成数据有效后，`tx_top` 的
+  `iq` 在 11976 拍上**逐比特相同**（因为"数据非零时 valid 必为高"是这条链的设计性质，
+  已由 TB 断言）。代价是每条链约 130 个 FF，只碰手写文件，8 个 HDL Coder 生成的文件
+  一个没改。
+- **一个待板上确认的点**（PG269）：RFDC 的 `s_axis_tvalid` 为低时，DAC 是输出 0 还是保持
+  上一个样点。两种都安全：valid 为低时 `iq` 已经是 0（valid 落下前有几百拍真数据早已泄放
+  完、复乘器算出来就是 0），所以不会有残留载波被 hold 住。
+- 想用 ILA 看这两根 valid 需要重生成 IP：`u_ila_tx` 的 `probe0` 已经被 256 位的 `iq` 占满。
+
+本地回归（不需要 Xilinx IP，`iverilog` 直接跑）：
+
+```bash
+iverilog -g2005 -o /tmp/tb_upval.vvp rtl/zero_interpolator.v rtl/upsamping_*.v \
+    rtl/rcos_*.v rtl/anti_imaging_*.v tb/tb_upsampling_valid.v && vvp /tmp/tb_upval.vvp
+```
+
+四条链各喂 4 个符号再停喂，断言三条性质：**输出非零的每一拍 valid 都为高**（不丢数据，
+实测 0 违反）、**输入停了 valid 必须落低**、突发期间 valid 为高。`tb/tb_tx.v` 另外在
+`iq`/DAC tvalid 这个边界上查同一条性质（两链都开、循环发，valid 必须为高且不能有数据被
+静音）。
 
 ## 四、新增速率的滤波器设计
 

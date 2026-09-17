@@ -27,7 +27,9 @@ module zero_interpolator#(
         input clk, rst_n,
         input [15:0] x,
         input x_valid,
+        input x_data_valid,          // x carries real data this cycle
         output reg y_valid,
+        output reg y_data_valid,     // y carries real data (not an inserted zero)
         output reg [15:0] y
     );
 
@@ -62,6 +64,30 @@ module zero_interpolator#(
                 else if(pending) y <= xr;
                 else             y <= 16'd0;
                 pending <= 0;
+            end
+        end
+    end
+
+    // y_data_valid is the data-valid twin of the block above: it rides along
+    // with the sample exactly like `pending` does, so it lands on the same
+    // slot and stays in step with y and y_valid.
+    // NOTE: keep this a *separate* signal from y_valid.  y_valid is the
+    // free-running per-slot strobe the downstream FIRs use as their
+    // clk_enable and nobody is allowed to gate it by data validity -- their
+    // pipelines would stall.  y_data_valid is only an annotation.
+    reg pending_dv;
+    always @(posedge clk or negedge rst_n) begin
+        if(!rst_n) begin
+            y_data_valid <= 0;
+            pending_dv   <= 0;
+        end
+        else begin
+            if(x_valid) pending_dv <= x_data_valid;
+            if(slot) begin
+                if(x_valid)      y_data_valid <= x_data_valid;
+                else if(pending) y_data_valid <= pending_dv;
+                else             y_data_valid <= 1'b0;
+                pending_dv <= 0;
             end
         end
     end

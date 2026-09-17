@@ -13,6 +13,9 @@
 extern double fre_bpsk, fre_qpsk, atten_bpsk, atten_qpsk;
 extern u8     ctrl_bpsk, ctrl_qpsk;
 extern u8     tx_rate_sel;
+extern u8     tx_bpsk_single_shot;   /* bpsk 发射模式：0 循环发（默认），1 单次发 */
+extern u32    tx_bpsk_sym_num;       /* bpsk 单次发符号数，0 = 不发。case 133 给的是数据文件
+                                     * 大小(kB)，adhocSoft.c 按每符号 1 bit 换算成 bit 数 */
 
 /*
  * DDS 频点配置公共函数
@@ -116,6 +119,27 @@ void set_rate_sel(u8 sel)
 }
 
 /*
+ * bpsk 循环发 / 单次发配置（寄存器 0x712/0x714/0x716）
+ * sym_num 是 23 位（整表 4194304 个符号 = 512 kB 的文件），分低 16 位 / 高 7 位两次写，
+ * 所以不是原子操作：半字更新期间硬件可能看到一个中间值。安全做法是
+ * 在 tx 复位期间（TX_REG_RESET = 0）调用本函数，也就是 tx_init() 里的位置。
+ * 本函数只写寄存器；配置本身存在 adhocSoft.c 的 tx_bpsk_sym_num /
+ * tx_bpsk_single_shot 里（case 133 从包里解出来），tx_init() 负责写下去。
+ * 发满 sym_num 个符号后硬件自己停（读指针也一起冻住），要再发一次必须先
+ * 脉冲一次 TX_REG_RESET（0 再 1）把读指针、符号计数器、done 一起清掉。
+ * 注意：TX_REG_RESET 只清读指针，不清 RAM 里的表。
+ */
+void set_bpsk_burst(unsigned long sym_num, unsigned char single_shot)
+{
+    emc_write(TX_REG_BPSK_SYM_NUM_L,   (u16)(sym_num & 0xFFFFUL));
+    emc_write(TX_REG_BPSK_SYM_NUM_H,   (u16)((sym_num >> 16) & 0x7FUL));
+    emc_write(TX_REG_BPSK_SINGLE_SHOT, (u16)(single_shot & 0x1));
+
+    printf("bpsk burst : sym_num = %lu, mode = %s \r\n",
+           sym_num, (single_shot & 0x1) ? "single shot" : "cyclic");
+}
+
+/*
  * bpsk 符号表 RAM 写
  * data : 符号表数据（每字 16bit，写地址由硬件自动递增）
  * len  : 写入字数（BPSK 262144 / QPSK 32768，应与对应 RAM 深度一致）
@@ -163,6 +187,9 @@ void tx_init(void)
 
     set_rate_sel(tx_rate_sel);    /* 速率选择 //20260902 case133 配置的速率 */
     
+    /* 循环发/单次发：在复位期间写，避开 sym_num 高低半字的中间值 */
+    set_bpsk_burst(tx_bpsk_sym_num, tx_bpsk_single_shot);    /* 默认循环发，和改动前一致 */
+
     emc_write(TX_REG_RESET, 1);     /* 解除 tx 复位 */
     emc_write(TX_REG_BPSK_ENABLE, ctrl_bpsk);  /* bpsk 使能 */
     emc_write(TX_REG_QPSK_ENABLE, ctrl_qpsk);  /* qpsk 使能 */

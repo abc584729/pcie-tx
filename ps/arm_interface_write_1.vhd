@@ -399,7 +399,9 @@ entity arm_interface_write_1 is
         ram_w_data_bpsk_ps  : out STD_LOGIC_VECTOR(15 downto 0);
         ram_w_en_qpsk_ps    : out STD_LOGIC;
         ram_w_addr_qpsk_ps  : out STD_LOGIC_VECTOR(14 downto 0);
-        ram_w_data_qpsk_ps  : out STD_LOGIC_VECTOR(15 downto 0)
+        ram_w_data_qpsk_ps  : out STD_LOGIC_VECTOR(15 downto 0);
+        bpsk_sym_num_ps     : out STD_LOGIC_VECTOR(22 downto 0);
+        bpsk_single_shot_ps : out STD_LOGIC
 	);
 end arm_interface_write_1;
 
@@ -747,6 +749,10 @@ constant ADDR_RAM_WDATA_QPSK  : std_logic_vector(11 downto 0) := x"70A";
 constant ADDR_BPSK_EN         : std_logic_vector(11 downto 0) := x"70C";
 constant ADDR_QPSK_EN         : std_logic_vector(11 downto 0) := x"70E";
 constant ADDR_RATE_SEL        : std_logic_vector(11 downto 0) := x"710";
+----    bpsk 循环发/单次发：待发符号数（23 位，高低分开写）+ 模式选择    ----
+constant ADDR_BPSK_SYM_NUM_L   : std_logic_vector(11 downto 0) := x"712";
+constant ADDR_BPSK_SYM_NUM_H   : std_logic_vector(11 downto 0) := x"714";
+constant ADDR_BPSK_SINGLE_SHOT : std_logic_vector(11 downto 0) := x"716";
 
 ----    bpsk/qpsk RAM 写：地址匹配、下降沿、计数器内部信号    ----
 signal ram_wdata_bpsk_eq    : std_logic;
@@ -5562,6 +5568,36 @@ begin
 		if ps_cen = '0' and ps_wen = '0' then
 			if ps_addr = ADDR_RATE_SEL then
 				rate_sel_ps <= ps_dout(0);
+			end if;
+		end if;
+	end if;
+end process;
+
+----    bpsk 单次发要发的符号数（23 位，照 DDS pinc 的高低 16 位写法）    ----
+process(reset_128M,clk_128M)
+begin
+	if reset_128M = '0' then
+		bpsk_sym_num_ps <= (others => '0');
+	elsif clk_128M'event and clk_128M = '1' then
+		if ps_cen = '0' and ps_wen = '0' then
+			if ps_addr = ADDR_BPSK_SYM_NUM_H then
+				bpsk_sym_num_ps(22 downto 16) <= ps_dout(6 downto 0);
+			elsif ps_addr = ADDR_BPSK_SYM_NUM_L then
+				bpsk_sym_num_ps(15 downto 0) <= ps_dout(15 downto 0);
+			end if;
+		end if;
+	end if;
+end process;
+
+----    bpsk 循环发(0)/单次发(1)    ----
+process(reset_128M,clk_128M)
+begin
+	if reset_128M = '0' then
+		bpsk_single_shot_ps <= '0';
+	elsif clk_128M'event and clk_128M = '1' then
+		if ps_cen = '0' and ps_wen = '0' then
+			if ps_addr = ADDR_BPSK_SINGLE_SHOT then
+				bpsk_single_shot_ps <= ps_dout(0);
 			end if;
 		end if;
 	end if;

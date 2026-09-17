@@ -33,20 +33,22 @@ module tb_bpsk_rate;
   reg  [15:0] u_wdata = 0;
 
   bpsk u_dut (
-    .clk      (clk),
-    .rst_n    (rst_n),
-    .ram_en   (ram_en),
-    .bpsk_en  (bpsk_en),
-    .rate_sel (rate_sel),
-    .dds_pinc (16'd0),
-    .dds_poff (128'd0),
-    .dds_rstn (rst_n),
-    .atten    (16'h4000),      // 0 dB
-    .w_en     (u_wen),
-    .w_addr   (u_waddr),
-    .w_data   (u_wdata),
-    .sig_i    (sig_i),
-    .sig_q    (sig_q)
+    .clk         (clk),
+    .rst_n       (rst_n),
+    .ram_en      (ram_en),
+    .bpsk_en     (bpsk_en),
+    .rate_sel    (rate_sel),
+    .dds_pinc    (16'd0),
+    .dds_poff    (128'd0),
+    .dds_rstn    (rst_n),
+    .atten       (16'h4000),   // 0 dB
+    .w_en        (u_wen),
+    .w_addr      (u_waddr),
+    .w_data      (u_wdata),
+    .sym_num     (23'd0),      // cyclic mode: sym_num is don't-care
+    .single_shot (1'b0),
+    .sig_i       (sig_i),
+    .sig_q       (sig_q)
   );
 
   always #5 clk = ~clk;
