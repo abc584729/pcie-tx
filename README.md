@@ -42,7 +42,7 @@ pcie-tx/
 │   ├── tx_start.py                      # 上位机 UDP 开播命令（case 135：单次发/循环发 + 符号数 + 起始时基）
 │   ├── tx_stop.py                       # 上位机 UDP 停发命令（case 136：0x702 = 0）
 │   ├── tx_ram_configure.py              # 符号表分片上传（case 134，64 包）
-│   └── gen_symbol_table.py              # 生成随机符号表文件（.bin）
+│   └── gen_symbol_table.py              # 生成 1024 bit 分帧符号表（.bin，奇偶帧同步头）
 │
 ├── matlab/                              # Simulink 模型与滤波器设计
 │   ├── bpsk.slx / qpsk.slx              # BPSK / QPSK 链路模型
@@ -164,18 +164,18 @@ pcie-tx/
 **配置、灌表和开播是解耦的，顺序是先配置、再灌表、最后开播：**
 
 ```bash
-python gen_symbol_table.py -o symbols.bin --table-sel bpsk            # 1. 生成随机表
+python gen_symbol_table.py -o 512KB.bin --table-sel bpsk              # 1. 生成分帧表（4096 帧）
 python tx_configure.py --bpsk-freq 100 --qpsk-freq 200                # 2. 配置频点/衰减/使能/速率（立即生效）
-python tx_ram_configure.py --table symbols.bin --table-sel bpsk      # 3. 灌 BPSK 表
-python gen_symbol_table.py -o symbols.bin --table-sel qpsk            #    换 QPSK 再生成
-python tx_ram_configure.py --table symbols.bin --table-sel qpsk      #    灌 QPSK 表
+python tx_ram_configure.py --table 512KB.bin --table-sel bpsk        # 3. 灌 BPSK 表
+python gen_symbol_table.py -o 64KB.bin --table-sel qpsk               #    换 QPSK 再生成（512 帧）
+python tx_ram_configure.py --table 64KB.bin --table-sel qpsk         #    灌 QPSK 表
 python tx_start.py --single 0                                         # 4. 开播（循环发）
 python tx_stop.py                                                     # 5. 停发（不复位，时基照常走）
 ```
 
 | 脚本 | 干什么 |
 |------|--------|
-| `ps/gen_symbol_table.py` | 生成随机符号表文件（`.bin`，大小任意、**上限 512 KB**：`--table-sel` 满表 / `--words` / `--bytes`，支持 `512K` 后缀，种子可复现） |
+| `ps/gen_symbol_table.py` | 生成分帧符号表文件（`.bin`，1024 bit/帧、7 bit 同步头、奇偶帧交替；**必须是 2 KB 整数倍、上限 512 KB**：`--table-sel` 满表 / `--words` / `--bytes`，支持 `512K` 后缀，种子可复现） |
 | `ps/tx_configure.py` | 发 case 133：频点 / 衰减 / 使能 / 速率。**运行中直接下发、立即生效**（`tx_apply_config()`），不碰 `TX_REG_RESET`、不中断正在发的包；但**不开播、不重启** |
 | `ps/tx_ram_configure.py` | 发 case 134：整表分片、每包 512 字 = 1028 字节，BPSK **512 包** / QPSK **64 包**；`--table-sel` 必填，一次一张 |
 | `ps/tx_start.py` | 发 case 135：**循环发或单次发**（`--single`、`--size`）**和起始时基**（`--tsel`，见 §3.3），然后板上 `tx_start()` **开播** |
@@ -210,16 +210,39 @@ case 134 包格式：
 > 零。脚本对**文件长度恰好等于另一张表**这种情况会打 WARNING 提示，但不会拦住 —— 真要
 > 发一段前缀时它只是噪音，看 `padding` 那行即可。
 
-生成任意长度（配合上面的补 0，就是"只发前 N 个字，后面停在零符号"）：
+### 帧格式（`gen_symbol_table.py`）
+
+生成的表按 **1024 bit 一帧**分帧，帧内前 **7 bit 是同步头**，其余 1017 bit 是随机数。
+两种帧交替出现，**先奇后偶**：
+
+| 帧 | 同步头（bit 1–7，发送顺序） | 转成字 |
+|----|--------------------------|--------|
+| 奇帧 | `1011000` | 帧首字低 7 位 = `0x0D` |
+| 偶帧 | `0100111` | 帧首字低 7 位 = `0x72` |
+
+两个同步头互为按位取反（`1011000 ⊕ 1111111 = 0100111`），所以第 7 位同时也是帧序号的
+奇偶；`0x0D + 0x72 = 0x7F`。
+
+表是**按 LSB-first 读出的**（`dpram.v`：读端口地址低位从字的最低比特一侧取组），所以
+**帧的第一个比特是帧首字的 bit0**，同步头按发送顺序从左到右填进 bit0..6。一帧 = 1024 bit
+= 64 字 = 128 字节，每帧只改写首字，其余 63 字整字随机。
+
+**文件大小必须是 2 KB 的整数倍**，即 16 帧一组。16 帧 = 8 奇 + 8 偶，所以文件必然收在偶帧
+上，下次突发又从奇帧开始 —— 反复重发不会让奇偶相位漂移。不满足这个倍数直接报错退出。
 
 ```bash
-python gen_symbol_table.py -o prefix.bin --words 1000     # 1000 字 = 2000 字节
-python gen_symbol_table.py -o part.bin --bytes 256K       # 256 KiB = 131072 字
+python gen_symbol_table.py -o 512KB.bin --table-sel bpsk --seed 0xC0FFEE  # 4096 帧
+python gen_symbol_table.py -o 64KB.bin  --table-sel qpsk --seed 0xC0FFEE  #  512 帧
+python gen_symbol_table.py -o part.bin  --bytes 256K --seed 0xC0FFEE      # 2048 帧
 ```
 
-`--words` / `--bytes` / `--table-sel` 三选一，`K`/`M`/`G` 后缀按 1024 进制。**上限 512 KB**
-（524288 字节 = 262144 字，即 BPSK 满表）—— 再长也没地方发，所以直接报错退出，不会写出
-一个发不出去的文件。
+`--words` / `--bytes` / `--table-sel` 三选一，`K`/`M`/`G` 后缀按 1024 进制，但**都必须是
+2 KB 的整数倍**（`--words` 是 1024 的整数倍）。**上限 512 KB**（524288 字节 = 262144 字，
+即 BPSK 满表）—— 再长也没地方发，所以直接报错退出，不会写出一个发不出去的文件。
+
+> 同一个 `--seed` 生成时，短文件是长文件逐字节相同的前缀（随机流按序消费），所以
+> `64KB.bin` 就是 `512KB.bin` 的前 65536 字节 —— 拿小表验完再灌大表时，前 64 KB 的
+> 内容是同一份。但**补零那段不是合法帧**：零字既没有同步头也不随机，会在 RX 侧失锁。
 
 > **使能开关**：`ps/top.vhd:4774-4784` 把 PS 与 VIO 对发射链路的控制二选一，由
 > `probe_out7`（`tx_sel_vio_ps`）决定，上电默认 0 = 选 VIO，此时 PS 写的频点 / 衰减 /
