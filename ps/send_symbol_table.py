@@ -4,17 +4,20 @@ send_symbol_table.py
 Upload a symbol table to a node's TX symbol RAM over UDP, packed
 according to case 134 of the //20260902 edit in adhocSoft.c.
 
-Run send_tx_init.py LAST -- configuring the RAM and initializing the
-transmitter are decoupled, and this is the order they have to happen in:
+Run tx_start.py LAST -- configuring, uploading the RAM and starting the
+transmitter are all decoupled, and this is the order they have to happen in:
 
-    1. this script uploads the table (case 134).  The board accumulates
+    1. tx_configure.py sends case 133: frequencies / attenuations /
+       enables / rate.  It only latches them, nothing touches the PL yet.
+    2. this script uploads the table (case 134).  The board accumulates
        every chunk in its own buffer and only writes the RAM once the
        last one lands, so a partial upload never reaches the PL.  There
        is nothing to transmit from yet, and the transmitter is still
        held off.
-    2. send_tx_init.py then sends case 133, which runs tx_init(): it
-       resets the read pointer to 0, applies the DDS frequencies /
-       attenuations / enables, and switches the RAM read enable on.
+    3. tx_start.py sends case 135, which runs tx_init(): it resets the
+       read pointer to 0, applies the DDS frequencies / attenuations /
+       enables / rate, the burst length and mode, and the start position
+       from tx_time_calibration.py, then switches the RAM read enable on.
        That is the moment playback starts.
 
 Both the write pointer and the read pointer are at 0 when transmission
@@ -73,10 +76,11 @@ tell them apart on the wire.
 
 Examples (this is the order they run in):
     python gen_symbol_table.py -o symbols.bin --table-sel bpsk
+    python tx_configure.py --bpsk-freq 100 --qpsk-freq 200
     python send_symbol_table.py --table symbols.bin --table-sel bpsk --dry-run
     python send_symbol_table.py --table symbols.bin --table-sel bpsk
     python send_symbol_table.py --table symbols.bin --table-sel qpsk
-    python send_tx_init.py --bpsk-freq 100 --qpsk-freq 200
+    python tx_start.py --single 0
 """
 
 import argparse
@@ -156,7 +160,7 @@ def send(sock, pkt, addr):
 def main():
     ap = argparse.ArgumentParser(
         description='Upload a symbol table to the TX symbol RAM (case 134). '
-                    'Run send_tx_init.py afterwards to start transmitting.')
+                    'Run tx_start.py afterwards to start transmitting.')
     ap.add_argument('--ip', default='192.168.1.10', help='node IP (default 192.168.1.10)')
     ap.add_argument('--port', type=int, default=14147, help='node ctrl port (default 14147)')
     ap.add_argument('--table', metavar='FILE', required=True,

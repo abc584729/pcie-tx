@@ -85,9 +85,12 @@ double atten_qpsk = 0;
 u8 ctrl_bpsk = 1;
 u8 ctrl_qpsk = 1;
 u8 tx_rate_sel = 0;    /* 速率选择：0 -> bpsk 450k / qpsk 4.5M，1 -> bpsk 400k / qpsk 6.667M */
-u8  tx_bpsk_single_shot = 0;    /* bpsk 发射模式：0 循环发（默认），1 单次发 */
-u32 tx_bpsk_sym_num = 0;        /* bpsk 单次发要发的符号数，0 = 不发。case 133 里给的是数据文件大小(kB)，
+u8  tx_bpsk_single_shot = 0;    /* bpsk 发射模式：0 循环发（默认），1 单次发。
+                                 * case 135（tx_start.py）配置，tx_init() 写下去（默认值和不带参数一致） */
+u32 tx_bpsk_sym_num = 0;        /* bpsk 单次发要发的符号数，0 = 不发。case 135 里给的是数据文件大小(kB)，
                                  * 按 BPSK 每符号 1 bit 换算而来（kB x 1024 x 8）；上限 23 位 = 8388607 */
+u16 tx_bpsk_time_sel = 0;       /* bpsk 起始时基：0..1023，1024 个符号一圈，时基走到这个值才开读门
+                                 * （0 = 尽快开始）。case 136 的第 1..2 字节（u16 小端） */
 //20260902
 
 #if 1
@@ -1418,8 +1421,9 @@ void ProcCmd(unsigned char *pBuf, U16 len)
 			txPeriodicPktNum = 0;
 			break;
 //20260902 edit
+		// 发射参数配置
 		case 133:
-			printf("initialization setting\r\n");
+			printf("tx configure\r\n");
 			ctrl_bpsk = pBuf[1];
 			memcpy(&fre_bpsk, &pBuf[2], 8);
 			memcpy(&atten_bpsk, &pBuf[10], 8);
@@ -1427,38 +1431,15 @@ void ProcCmd(unsigned char *pBuf, U16 len)
 			memcpy(&fre_qpsk, &pBuf[19], 8);
 			memcpy(&atten_qpsk, &pBuf[27], 8);
 			tx_rate_sel = (len >= 36) ? (u8)(pBuf[35] & 0x1) : 0;
-			/* 循环发/单次发：45 字节以上的包才有这几个字段，老包按循环发 */
-			tx_bpsk_single_shot = (len >= 45) ? (u8)(pBuf[36] & 0x1) : 0;
-			/* 0x25 起 8 字节 double：数据文件大小，单位 kB（1024 进制，和文件大小
-			 * 脚本的 K/M/G 后缀一致）。BPSK 每符号 1 bit，所以文件有多少 bit
-			 * 就发多少个符号，正好是 bpsk_ram 的 sym_num。 */
-			{
-				double size_kb = 0.0;
 
-				if (len >= 45)
-					memcpy(&size_kb, &pBuf[37], 8);
-
-				if (size_kb < 0.0)
-					size_kb = 0.0;
-				if (size_kb > 8388607.0 / 8192.0)    /* 23 位符号数上限，约 1024 kB */
-				{
-					printf("tx bpsk burst: %.6f kB too big (max %.3f kB), clamped\r\n",
-					       size_kb, 8388607.0 / 8192.0);
-					size_kb = 8388607.0 / 8192.0;
-				}
-				tx_bpsk_sym_num = (u32)(size_kb * 8192.0 + 0.5);    /* kB -> 字节 -> bit */
-				printf("tx bpsk burst: size = %.6f kB -> %d bits (symbols)\r\n",
-				       size_kb, (int)tx_bpsk_sym_num);
-			}
-
-			tx_init();
+			tx_apply_config();
 
 			printf("bpsk set as: enable = %d, dds_f = %f, attenuation = %f.\r\n", ctrl_bpsk, fre_bpsk, atten_bpsk);
 			printf("qpsk set as: enable = %d, dds_f = %f, attenuation = %f.\r\n", ctrl_qpsk, fre_qpsk, atten_qpsk);
 			printf("tx rate select = %d.\r\n", tx_rate_sel);
-			printf("tx bpsk burst: sym_num = %d, single_shot = %d.\r\n",
-			       (int)tx_bpsk_sym_num, (int)tx_bpsk_single_shot);
+			printf("tx config applied at runtime; run tx_start.py (case 135) to start or restart.\r\n");
 			break;
+		// 发射文件配置
 		case 134:
 		{
 			U16 chunk_idx;
@@ -1526,6 +1507,81 @@ void ProcCmd(unsigned char *pBuf, U16 len)
 			}
 			break;
 		}
+//20260902 edit
+		// 发射启动
+		case 135:
+			/* tx_start.py：bpsk 单次发/循环发 + 符号数，然后 tx_init() 开播。
+			 * 频点/衰减/使能/速率取 case 133 存下的全局量，起始时基取 case 136 存下的。
+			 * 符号数循环发下是"每轮发多少个"：数满回到第 0 个符号接着下一轮（0 当作整表，
+			 * 和上电默认一致）；单次发下数满就停（0 表示一个都不发）。
+			 * 要再发一次：重发本命令最干净（tx_init() 里的 TX_REG_RESET 脉冲会把读指针、
+			 * 符号计数器、done 和时基一起清掉）；把 TX_REG_RAM_EN 拉低一下也可以，rd_en
+			 * 拉低同样会清读指针和符号计数，再拉高就从第 0 个符号重新发（case 136 走这条）。 */
+		{
+			double size_kb = 0.0;
+
+			/* 新命令没有老包要兼容，超长/超短的包都不认 —— 宁可丢包也不猜 */
+			if (len < 10)
+			{
+				printf("tx start: bad len %d (expect 10), dropped\r\n", len);
+				break;
+			}
+
+			tx_bpsk_single_shot = (u8)(pBuf[1] & 0x1);
+
+			/* 2..9 字节 double：数据文件大小，单位 kB（1024 进制，和文件大小
+			 * 脚本的 K/M/G 后缀一致）。BPSK 每符号 1 bit，所以文件有多少 bit
+			 * 就发多少个符号，正好是 bpsk_ram 的 sym_num —— 循环发下这是"每轮"
+			 * 的量，0 当作整表 512 kB；单次发下 0 是一个都不发。 */
+			memcpy(&size_kb, &pBuf[2], 8);
+
+			if (size_kb < 0.0)
+				size_kb = 0.0;
+			if (size_kb > 8388607.0 / 8192.0)    /* 23 位符号数上限，约 1024 kB */
+			{
+				printf("tx bpsk burst: %.6f kB too big (max %.3f kB), clamped\r\n",
+				       size_kb, 8388607.0 / 8192.0);
+				size_kb = 8388607.0 / 8192.0;
+			}
+			tx_bpsk_sym_num = (u32)(size_kb * 8192.0 + 0.5);    /* kB -> 字节 -> bit */
+
+			printf("tx bpsk burst: size = %.6f kB -> %d bits (symbols)\r\n",
+			       size_kb, (int)tx_bpsk_sym_num);
+			printf("tx bpsk burst: sym_num = %d, single_shot = %d.\r\n",
+			       (int)tx_bpsk_sym_num, (int)tx_bpsk_single_shot);
+
+			tx_init();
+
+			printf("tx started: rate = %d, time_sel = %d "
+			       "(first symbol at timebase position %d).\r\n",
+			       (int)tx_rate_sel, (int)tx_bpsk_time_sel, (int)tx_bpsk_time_sel + 1);
+			break;
+		}
+//20260902 edit
+		// 时间校准
+		case 136:
+			if (len < 3)
+			{
+				printf("tx time sel: bad len %d (expect 3), dropped\r\n", len);
+				break;
+			}
+
+			tx_bpsk_time_sel = (u16)(pBuf[1] | ((u16)pBuf[2] << 8));
+			if (tx_bpsk_time_sel > 1023)
+			{
+				printf("tx bpsk time sel: %d out of range (0..1023), clamped\r\n",
+				       (int)tx_bpsk_time_sel);
+				tx_bpsk_time_sel = 1023;
+			}
+
+			emc_write(TX_REG_RAM_EN, 0); 
+			set_bpsk_time_sel(tx_bpsk_time_sel);    
+    		emc_write(TX_REG_RAM_EN, 1); 
+
+			printf("tx bpsk time sel: %d (first symbol at timebase position %d), "
+			       "applied at runtime without reset.\r\n",
+			       (int)tx_bpsk_time_sel, (int)tx_bpsk_time_sel + 1);
+			break;
 //20260902
 		default:
 			printf("debug: type %d wrong", type);

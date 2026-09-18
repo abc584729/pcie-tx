@@ -33,6 +33,7 @@ module bpsk(
         input [15:0] w_data,
         input [22:0] sym_num,        // burst length in symbols (single_shot only)
         input single_shot,           // 0 = cyclic (default), 1 = stop after sym_num
+        input [9:0] time_sel,        // 1024-symbol timebase position the read gate opens at
         output [127:0] sig_i, sig_q,
         output sig_valid             // 8 lanes' complex-multiplier valids OR'ed into one
     );
@@ -48,6 +49,7 @@ module bpsk(
         .rd_en         (ram_en),
         .sym_num       (sym_num),
         .single_shot   (single_shot),
+        .time_sel      (time_sel),
         .rdata         (bit),
         .rdata_valid   (bit_valid)
     );

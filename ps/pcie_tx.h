@@ -21,6 +21,7 @@
 #define TX_REG_BPSK_SYM_NUM_L   (0x712)    /* bpsk 单次发符号数低 16 位（0x714 = 高 7 位） */
 #define TX_REG_BPSK_SYM_NUM_H   (0x714)    /* bpsk 单次发符号数高 7 位（仅 bit6:0 有效，整表 4194304 个符号） */
 #define TX_REG_BPSK_SINGLE_SHOT (0x716)    /* bpsk 发射模式：bit0 = 0 循环发（默认），1 单次发满符号数就停 */
+#define TX_REG_BPSK_TIME_SEL    (0x718)    /* bpsk 起始时基：0..1023，1024 个符号一圈，时基计数走到该值时打开读门 */
 
 /* DDS 中频配置寄存器 */
 #define DDS_REG_RESET           (0x800)    /* dds 复位：0 复位，1 解除复位 */
@@ -48,16 +49,53 @@ void set_attenuation_qpsk(double atten_db);
 /* 发射速率选择：sel = 0 -> bpsk 450k / qpsk 4.5M，sel = 1 -> bpsk 400k / qpsk 6.667M */
 void set_rate_sel(unsigned char sel);
 
+/* 发射使能（0x70C / 0x70E）：0 关闭，1 使能。运行时可改 */
+void set_bpsk_enable(unsigned char en);
+void set_qpsk_enable(unsigned char en);
+
+/*
+ * 运行中直接下发配置：频点、衰减、速率、使能。
+ * 这四项都是运行时可改的，本函数**不碰 TX_REG_RESET** —— 读指针、符号计数器、
+ * done 和时基都不受影响，正在发的这一串也不中断，改完下一拍就生效。
+ * case 133（tx_configure.py）走这条路径，随时可以重发。
+ * 单次发/循环发、符号数、起始时基不在这里：那三项必须在复位窗口里写，
+ * 只能由 tx_init() 落下去。
+ */
+void tx_apply_config(void);
+
 /*
  * bpsk 循环发 / 单次发配置
- * sym_num     : 单次发要发的符号数，1..4194304；0 表示一个符号都不发
- *               （整表 4194304 = 2^22 个符号，所以 23 位够用；> 表长则整表重复）
- * single_shot : 0 = 循环发（默认，sym_num 无意义），1 = 单次发
+ * sym_num     : 一轮要发的符号数，1..8388607（23 位）。0 在循环发下当作整表
+ *               4194304，在单次发下表示一个符号都不发。大于表长（4194304）时
+ *               整表重复 —— 读指针低 22 位回卷，高位继续进位。
+ * single_shot : 0 = 循环发（默认）：每轮发 sym_num 个，数满回到第 0 个符号接着
+ *               下一轮，一直循环；1 = 单次发：数满就停（done 锁住）。
  * 注意：写 sym_num 要分两次写寄存器，不是原子操作；请在 tx 复位期间
- *       （emc_write(TX_REG_RESET, 0) 之后、写 1 之前）调用。发完后再发一次
- *       必须先脉冲 TX_REG_RESET 清读指针，再让 TX_REG_RAM_EN 为高。
+ *       （emc_write(TX_REG_RESET, 0) 之后、写 1 之前）调用。
+ *       要重发有两种办法：脉冲一次 TX_REG_RESET，或者把 TX_REG_RAM_EN 拉低一下
+ *       —— rd_en 拉低会一并清掉读指针和符号计数，再拉高就是从第 0 个符号
+ *       重新发，不需要复位（case 136 走的就是这条）。
  */
 void set_bpsk_burst(unsigned long sym_num, unsigned char single_shot);
+
+/*
+ * bpsk 起始时基（寄存器 0x718）
+ * tsel : 0..1023，1024 个符号为一圈。时基和读脉冲同源，所以匹配上的那个
+ *        脉冲用来开读门、本身不读表：实际发出的第一个符号落在时基位置
+ *        tsel+1。写 0 = 复位后第一拍就开门，等于尽快开始。
+ *        时基只在 rst_n（tx 复位）时清零，写晚了要等这一圈走完才轮到这个值。
+ *        所以 tx_init()（case 135）在复位窗口里写它。
+ */
+void set_bpsk_time_sel(unsigned short tsel);
+
+/*
+ * 运行中改起始时基 —— case 136（tx_time_calibration.py）。
+ * 停发（0x702=0）-> 写 0x718 -> 重发（0x702=1），**不碰 TX_REG_RESET**，
+ * 因为 count/cnt_1024 只由 rst_n 清，一复位参考时基就变了。
+ * 代价：重新开门要等时基转到新的 tsel，最多 1024 个符号（450k 档 2.276ms）。
+ * 单次发跑完 done 锁住之后，这个函数不会让这一串重新开始，要重发 case 135。
+ */
+void set_bpsk_time_sel_runtime(unsigned short tsel);
 
 /* ================= RAM 符号表写函数 ================= */
 

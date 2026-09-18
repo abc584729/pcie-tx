@@ -9,13 +9,17 @@
 #include "AdhocSoft.h"
 #include <math.h>
 
-/* config state owned by adhocSoft.c //20260902 case133 */
+/* config state owned by adhocSoft.c //20260902: 频点/衰减/使能/速率是 case 133，
+ * 单次发/符号数是 case 135（tx_start.py），起始时基是 case 136（tx_time_calibration.py） */
 extern double fre_bpsk, fre_qpsk, atten_bpsk, atten_qpsk;
 extern u8     ctrl_bpsk, ctrl_qpsk;
 extern u8     tx_rate_sel;
 extern u8     tx_bpsk_single_shot;   /* bpsk 发射模式：0 循环发（默认），1 单次发 */
-extern u32    tx_bpsk_sym_num;       /* bpsk 单次发符号数，0 = 不发。case 133 给的是数据文件
+extern u32    tx_bpsk_sym_num;       /* bpsk 单次发符号数，0 = 不发。case 135 给的是数据文件
                                      * 大小(kB)，adhocSoft.c 按每符号 1 bit 换算成 bit 数 */
+extern u16    tx_bpsk_time_sel;      /* bpsk 起始时基：0..1023，1024 个符号一圈，时基走到该值才开读门
+                                     * （0 = 尽快开始）；实际第一个符号落在时基位置 time_sel + 1。
+                                     * case 136 存进来，tx_init() 写下去 */
 
 /*
  * DDS 频点配置公共函数
@@ -118,32 +122,68 @@ void set_rate_sel(u8 sel)
     printf("tx rate select : %d \r\n", (int)(sel & 0x1));
 }
 
+/* bpsk 发射使能（寄存器 0x70C）：运行时可改 */
+void set_bpsk_enable(u8 en)
+{
+    emc_write(TX_REG_BPSK_ENABLE, (u16)(en & 0x1));
+    printf("bpsk enable : %d \r\n", (int)(en & 0x1));
+}
+
+/* qpsk 发射使能（寄存器 0x70E）：运行时可改 */
+void set_qpsk_enable(u8 en)
+{
+    emc_write(TX_REG_QPSK_ENABLE, (u16)(en & 0x1));
+    printf("qpsk enable : %d \r\n", (int)(en & 0x1));
+}
+
 /*
- * bpsk 循环发 / 单次发配置（寄存器 0x712/0x714/0x716）
- * sym_num 是 23 位（整表 4194304 个符号 = 512 kB 的文件），分低 16 位 / 高 7 位两次写，
- * 所以不是原子操作：半字更新期间硬件可能看到一个中间值。安全做法是
- * 在 tx 复位期间（TX_REG_RESET = 0）调用本函数，也就是 tx_init() 里的位置。
- * 本函数只写寄存器；配置本身存在 adhocSoft.c 的 tx_bpsk_sym_num /
- * tx_bpsk_single_shot 里（case 133 从包里解出来），tx_init() 负责写下去。
- * 发满 sym_num 个符号后硬件自己停（读指针也一起冻住），要再发一次必须先
- * 脉冲一次 TX_REG_RESET（0 再 1）把读指针、符号计数器、done 一起清掉。
- * 注意：TX_REG_RESET 只清读指针，不清 RAM 里的表。
+ * 运行时可改的部分：频点、衰减、速率。
+ * tx_init() 和 case 133（tx_configure.py）共用 —— case 133 拿来直接下发，
+ * tx_init() 在复位窗口里再写一遍，保证每次都从已知状态起播。
  */
+static void tx_apply_runtime_cfg(void)
+{
+    set_dds_frequency_bpsk(fre_bpsk);    /* bpsk 中频 */
+    set_dds_frequency_qpsk(fre_qpsk);    /* qpsk 中频 */
+    set_attenuation_bpsk(atten_bpsk);    /* bpsk 数字衰减 */
+    set_attenuation_qpsk(atten_qpsk);    /* qpsk 数字衰减 */
+    set_rate_sel(tx_rate_sel);           /* 速率选择 */
+}
+
+/*
+ * 运行中直接下发配置（case 133 / tx_configure.py）。
+ * 不碰 TX_REG_RESET：读指针、符号计数器、done、时基一个都不动，正在发的
+ * 那一串也不中断，所以这四项随时可以改。改完立刻生效，不需要重发 case 135。
+ * 注意 rate_sel 会同时改符号速率和 add 的截位方式，切了要重新灌符号表。
+ */
+void tx_apply_config(void)
+{
+    tx_apply_runtime_cfg();
+    set_bpsk_enable(ctrl_bpsk);
+    set_qpsk_enable(ctrl_qpsk);
+    printf("tx config applied at runtime. \r\n");
+}
 void set_bpsk_burst(unsigned long sym_num, unsigned char single_shot)
 {
     emc_write(TX_REG_BPSK_SYM_NUM_L,   (u16)(sym_num & 0xFFFFUL));
     emc_write(TX_REG_BPSK_SYM_NUM_H,   (u16)((sym_num >> 16) & 0x7FUL));
     emc_write(TX_REG_BPSK_SINGLE_SHOT, (u16)(single_shot & 0x1));
 
-    printf("bpsk burst : sym_num = %lu, mode = %s \r\n",
-           sym_num, (single_shot & 0x1) ? "single shot" : "cyclic");
+    if (single_shot & 0x1)
+        printf("bpsk burst : sym_num = %lu, mode = single shot \r\n", sym_num);
+    else if (sym_num == 0)
+        printf("bpsk burst : mode = cyclic, whole table (%lu symbols) per turn \r\n",
+               4194304UL);
+    else
+        printf("bpsk burst : sym_num = %lu per turn, mode = cyclic \r\n", sym_num);
 }
 
-/*
- * bpsk 符号表 RAM 写
- * data : 符号表数据（每字 16bit，写地址由硬件自动递增）
- * len  : 写入字数（BPSK 262144 / QPSK 32768，应与对应 RAM 深度一致）
- */
+void set_bpsk_time_sel(u16 tsel)
+{
+    emc_write(TX_REG_BPSK_TIME_SEL, (u16)(tsel & 0x3FF));
+    printf("bpsk time sel : %u \r\n", (unsigned)(tsel & 0x3FF));
+}
+
 void write_bpsk_ram(const u16 *data, unsigned long len)
 {
     unsigned long i;
@@ -154,11 +194,6 @@ void write_bpsk_ram(const u16 *data, unsigned long len)
     printf("bpsk ram write done: %lu words\r\n", len);
 }
 
-/*
- * qpsk 符号表 RAM 写
- * data : 符号表数据（每字 16bit，写地址由硬件自动递增）
- * len  : 写入字数（BPSK 262144 / QPSK 32768，应与对应 RAM 深度一致）
- */
 void write_qpsk_ram(const u16 *data, unsigned long len)
 {
     unsigned long i;
@@ -177,22 +212,15 @@ void tx_init(void)
     emc_write(TX_REG_RESET, 0);     /* tx 复位 */
     emc_write(TX_REG_RAM_EN, 0);    /* ram 读使能关闭 */
 
-    /* 频点取 //20260902 case133 配置的全局量 */
-    set_dds_frequency_bpsk(fre_bpsk);    /* bpsk 中频 */
-    set_dds_frequency_qpsk(fre_qpsk);    /* qpsk 中频 */
-
-    /* 衰减取 //20260902 case133 配置的全局量，默认 0dB */
-    set_attenuation_bpsk(atten_bpsk);    /* bpsk 数字衰减 */
-    set_attenuation_qpsk(atten_qpsk);    /* qpsk 数字衰减 */
-
-    set_rate_sel(tx_rate_sel);    /* 速率选择 //20260902 case133 配置的速率 */
+    tx_apply_runtime_cfg();
     
-    /* 循环发/单次发：在复位期间写，避开 sym_num 高低半字的中间值 */
-    set_bpsk_burst(tx_bpsk_sym_num, tx_bpsk_single_shot);    /* 默认循环发，和改动前一致 */
+    set_bpsk_burst(tx_bpsk_sym_num, tx_bpsk_single_shot);  
+
+    set_bpsk_time_sel(0);
 
     emc_write(TX_REG_RESET, 1);     /* 解除 tx 复位 */
-    emc_write(TX_REG_BPSK_ENABLE, ctrl_bpsk);  /* bpsk 使能 */
-    emc_write(TX_REG_QPSK_ENABLE, ctrl_qpsk);  /* qpsk 使能 */
+    set_bpsk_enable(ctrl_bpsk);     /* bpsk 使能 */
+    set_qpsk_enable(ctrl_qpsk);     /* qpsk 使能 */
     emc_write(TX_REG_RAM_EN, 1);    /* ram 读使能 */
 
     printf("Tx has been initialized. \r\n");

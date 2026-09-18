@@ -461,7 +461,8 @@ entity ps_interface_1 is
         ram_w_addr_qpsk_ps  : out STD_LOGIC_VECTOR(14 downto 0);
         ram_w_data_qpsk_ps  : out STD_LOGIC_VECTOR(15 downto 0);
         bpsk_sym_num_ps     : out STD_LOGIC_VECTOR(22 downto 0);
-        bpsk_single_shot_ps : out STD_LOGIC
+        bpsk_single_shot_ps : out STD_LOGIC;
+        bpsk_time_sel_ps    : out STD_LOGIC_VECTOR(9 downto 0)
 	);
 end ps_interface_1;
 
@@ -836,7 +837,8 @@ component arm_interface_write_1
         ram_w_addr_qpsk_ps  : out STD_LOGIC_VECTOR(14 downto 0);
         ram_w_data_qpsk_ps  : out STD_LOGIC_VECTOR(15 downto 0);
         bpsk_sym_num_ps     : out STD_LOGIC_VECTOR(22 downto 0);
-        bpsk_single_shot_ps : out STD_LOGIC
+        bpsk_single_shot_ps : out STD_LOGIC;
+        bpsk_time_sel_ps    : out STD_LOGIC_VECTOR(9 downto 0)
 	);
 end component;
 
@@ -1291,7 +1293,8 @@ U1 : arm_interface_write_1 Port map (
         ram_w_addr_qpsk_ps  => ram_w_addr_qpsk_ps,
         ram_w_data_qpsk_ps  => ram_w_data_qpsk_ps,
         bpsk_sym_num_ps     => bpsk_sym_num_ps,
-        bpsk_single_shot_ps => bpsk_single_shot_ps
+        bpsk_single_shot_ps => bpsk_single_shot_ps,
+        bpsk_time_sel_ps    => bpsk_time_sel_ps
 );
 
 U2 : arm_interface_read_1 Port map ( 

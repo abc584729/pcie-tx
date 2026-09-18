@@ -401,7 +401,8 @@ entity arm_interface_write_1 is
         ram_w_addr_qpsk_ps  : out STD_LOGIC_VECTOR(14 downto 0);
         ram_w_data_qpsk_ps  : out STD_LOGIC_VECTOR(15 downto 0);
         bpsk_sym_num_ps     : out STD_LOGIC_VECTOR(22 downto 0);
-        bpsk_single_shot_ps : out STD_LOGIC
+        bpsk_single_shot_ps : out STD_LOGIC;
+        bpsk_time_sel_ps    : out STD_LOGIC_VECTOR(9 downto 0)
 	);
 end arm_interface_write_1;
 
@@ -753,6 +754,8 @@ constant ADDR_RATE_SEL        : std_logic_vector(11 downto 0) := x"710";
 constant ADDR_BPSK_SYM_NUM_L   : std_logic_vector(11 downto 0) := x"712";
 constant ADDR_BPSK_SYM_NUM_H   : std_logic_vector(11 downto 0) := x"714";
 constant ADDR_BPSK_SINGLE_SHOT : std_logic_vector(11 downto 0) := x"716";
+----    bpsk 起始时基：1024 个符号一圈，计数值走到 time_sel 时打开读门    ----
+constant ADDR_BPSK_TIME_SEL   : std_logic_vector(11 downto 0) := x"718";
 
 ----    bpsk/qpsk RAM 写：地址匹配、下降沿、计数器内部信号    ----
 signal ram_wdata_bpsk_eq    : std_logic;
@@ -5598,6 +5601,20 @@ begin
 		if ps_cen = '0' and ps_wen = '0' then
 			if ps_addr = ADDR_BPSK_SINGLE_SHOT then
 				bpsk_single_shot_ps <= ps_dout(0);
+			end if;
+		end if;
+	end if;
+end process;
+
+----    bpsk 起始时基 0..1023（1024 个符号一圈，写 0 = 立刻开始）    ----
+process(reset_128M,clk_128M)
+begin
+	if reset_128M = '0' then
+		bpsk_time_sel_ps <= (others => '0');
+	elsif clk_128M'event and clk_128M = '1' then
+		if ps_cen = '0' and ps_wen = '0' then
+			if ps_addr = ADDR_BPSK_TIME_SEL then
+				bpsk_time_sel_ps <= ps_dout(9 downto 0);
 			end if;
 		end if;
 	end if;

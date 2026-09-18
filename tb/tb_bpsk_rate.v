@@ -45,8 +45,9 @@ module tb_bpsk_rate;
     .w_en        (u_wen),
     .w_addr      (u_waddr),
     .w_data      (u_wdata),
-    .sym_num     (23'd0),      // cyclic mode: sym_num is don't-care
+    .sym_num     (23'd0),      // cyclic + 0 = the whole table, as before sym_num existed
     .single_shot (1'b0),
+    .time_sel    (10'd0),      // cyclic: gate opens with the timebase at 0
     .sig_i       (sig_i),
     .sig_q       (sig_q)
   );

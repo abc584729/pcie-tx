@@ -34,8 +34,9 @@ module tx_top(
         input        ram_w_en_bpsk,
         input [17:0] ram_w_addr_bpsk,
         input [15:0] ram_w_data_bpsk,
-        input [22:0] bpsk_sym_num,     // BPSK burst length in symbols
-        input        bpsk_single_shot, // 0 = cyclic (default), 1 = burst
+        input [22:0] bpsk_sym_num,     // BPSK symbols per turn (0 = whole table if cyclic)
+        input        bpsk_single_shot, // 0 = cyclic (repeat each turn), 1 = single burst
+        input [9:0]  bpsk_time_sel,    // 1024-symbol timebase position the BPSK read gate opens at
         input        ram_w_en_qpsk,
         input [14:0] ram_w_addr_qpsk,
         input [15:0] ram_w_data_qpsk,
@@ -60,6 +61,7 @@ module tx_top(
         .w_data        (ram_w_data_bpsk),
         .sym_num       (bpsk_sym_num),
         .single_shot   (bpsk_single_shot),
+        .time_sel      (bpsk_time_sel),
         .sig_i         (i_0),
         .sig_q         (q_0),
         .sig_valid     (bpsk_sig_valid)
