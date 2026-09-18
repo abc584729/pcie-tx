@@ -209,7 +209,7 @@ void tx_start(void)
 {
     printf("Tx starting ... \r\n");
 
-    // emc_write(TX_REG_RESET, 0);     /* tx 复位 */
+    emc_write(TX_REG_RESET, 1);     
     emc_write(TX_REG_RAM_EN, 0);    /* ram 读使能关闭 */
 
     tx_apply_runtime_cfg();
@@ -218,7 +218,6 @@ void tx_start(void)
 
     set_bpsk_time_sel(tx_bpsk_time_sel);
 
-    // emc_write(TX_REG_RESET, 1);     /* 解除 tx 复位 */
     set_bpsk_enable(ctrl_bpsk);     /* bpsk 使能 */
     set_qpsk_enable(ctrl_qpsk);     /* qpsk 使能 */
     emc_write(TX_REG_RAM_EN, 1);    /* ram 读使能 */
