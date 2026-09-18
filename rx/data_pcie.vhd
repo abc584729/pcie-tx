@@ -143,21 +143,6 @@ signal data_out_5_complex_multiplier : std_logic_vector(79 downto 0);
 signal data_out_6_complex_multiplier : std_logic_vector(79 downto 0);
 signal data_out_7_complex_multiplier : std_logic_vector(79 downto 0);
 
-COMPONENT FIR_decimation_D4B
-  PORT ( aclk : IN STD_LOGIC;
-         s_axis_data_tvalid : IN STD_LOGIC;
-         s_axis_data_tready : OUT STD_LOGIC;
-         s_axis_data_tdata : IN STD_LOGIC_VECTOR(15 DOWNTO 0);
-         m_axis_data_tvalid : OUT STD_LOGIC;
-         m_axis_data_tdata : OUT STD_LOGIC_VECTOR(39 DOWNTO 0) );
-END COMPONENT;
-signal rdy_FIR_decimation_D4B : std_logic;
-signal dout_I_internal_D4B : std_logic_vector(39 downto 0);
-signal dout_Q_internal_D4B : std_logic_vector(39 downto 0);
-
-signal dout_I_internal_D4B_delay : std_logic_vector(16 downto 0);
-signal dout_Q_internal_D4B_delay : std_logic_vector(16 downto 0);
-
 COMPONENT FIR_decimation_D4A
   PORT (
     aclk : IN STD_LOGIC;
@@ -506,20 +491,6 @@ begin
     end if;
 end process;  
 
-U20 : FIR_decimation_D4B port map ( aclk => clk,
-                                    s_axis_data_tvalid => rdy_FIR_decimation_D4A_delay,
-                                    s_axis_data_tready => open,
-                                    s_axis_data_tdata => dout_I_internal_D4A_delay(16 downto 1),
-                                    m_axis_data_tvalid => rdy_FIR_decimation_D4B,
-                                    m_axis_data_tdata => dout_I_internal_D4B );
-                                  
-U21 : FIR_decimation_D4B port map ( aclk => clk,
-                                    s_axis_data_tvalid => rdy_FIR_decimation_D4A_delay,
-                                    s_axis_data_tready => open,
-                                    s_axis_data_tdata => dout_Q_internal_D4A_delay(16 downto 1),
-                                    m_axis_data_tvalid => open,
-                                    m_axis_data_tdata => dout_Q_internal_D4B );          
-                                  
 --U22 : ila_data_dds_downsample
 --port map(
 --    clk => clk                                                                      ,
@@ -748,31 +719,13 @@ data_dds_out_Q <= data_out_7_Q(16 downto 1) & data_out_6_Q(16 downto 1) & data_o
 process(reset,clk)
 begin
     if reset = '0' then
-        dout_I_internal_D4B_delay <= (others => '0');
-    elsif clk'event and clk = '1' then
-        dout_I_internal_D4B_delay <= dout_I_internal_D4B(32 downto 16) + 1;
-    end if;
-end process;
-
-process(reset,clk)
-begin
-    if reset = '0' then
-        dout_Q_internal_D4B_delay <= (others => '0');
-    elsif clk'event and clk = '1' then
-        dout_Q_internal_D4B_delay <= dout_Q_internal_D4B(32 downto 16) + 1;
-    end if;
-end process;
-
-process(reset,clk)
-begin
-    if reset = '0' then
        data_out_valid <=  '0';
     elsif clk'event and clk = '1' then
-       data_out_valid <= rdy_FIR_decimation_D4B;
+       data_out_valid <= rdy_FIR_decimation_D4A_delay;
     end if;
 end process;
 
-data_out <= dout_Q_internal_D4B_delay(16 downto 1) & dout_I_internal_D4B_delay(16 downto 1);
+data_out <= dout_Q_internal_D4A_delay(16 downto 1) & dout_I_internal_D4A_delay(16 downto 1);
                         
                                                                                                                                                                                      
                                                                                                                                          

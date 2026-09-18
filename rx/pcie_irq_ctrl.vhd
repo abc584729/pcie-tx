@@ -74,8 +74,8 @@ COMPONENT pcie_irq_ctrl_bram
     clka : IN STD_LOGIC;
     wea : IN STD_LOGIC;
     ena : IN STD_LOGIC;
-    addra : IN STD_LOGIC_VECTOR(13 DOWNTO 0);
-    dina : IN STD_LOGIC_VECTOR(511 DOWNTO 0);
+    addra : IN STD_LOGIC_VECTOR(17 DOWNTO 0);
+    dina : IN STD_LOGIC_VECTOR(31 DOWNTO 0);
     clkb : IN STD_LOGIC;
     addrb : IN STD_LOGIC_VECTOR(13 DOWNTO 0);
     doutb : OUT STD_LOGIC_VECTOR(511 DOWNTO 0)
@@ -141,8 +141,9 @@ signal cnt_irq_12 : std_logic_vector(4 downto 0);
 signal addra : std_logic_vector(17 downto 0);
 signal wea0 : std_logic;
 signal wea1 : std_logic;
-signal dina : std_logic_vector(511 downto 0);
-signal din_analog : std_logic_vector(511 downto 0);
+signal dina : std_logic_vector(31 downto 0);
+signal dina_ila : std_logic_vector(511 downto 0);
+signal din_analog : std_logic_vector(31 downto 0);
 signal flag_rdy : std_logic;
 signal write_stop : std_logic;
 signal flag_rdy_up : std_logic;
@@ -313,7 +314,7 @@ begin
     elsif clk'event and clk = '1' then
         if flag_rdy_up = '1' then
             cnt_irq1 <= (others => '0');
-        elsif wea0 = '1' and addra = x"3FFF" and data_in_valid = '1' then
+        elsif wea0 = '1' and addra = x"3FFFF" and data_in_valid = '1' then
             cnt_irq1 <= cnt_irq1 + 1;
         end if;
     end if;
@@ -326,7 +327,7 @@ begin
     elsif clk'event and clk = '1' then
         if flag_rdy_up = '1' then
             cnt_irq2 <= (others => '0');
-        elsif wea1 = '1' and addra = x"3FFF" and data_in_valid = '1' then
+        elsif wea1 = '1' and addra = x"3FFFF" and data_in_valid = '1' then
             cnt_irq2 <= cnt_irq2 + 1;
         end if;
     end if;
@@ -341,7 +342,7 @@ begin
         if write_stop = '0' then
             dina <= (others => '0');
         elsif data_source_select = '0' then
-            dina <= data_in;
+            dina <= data_in(63 downto 32);
         else
             dina <= din_analog;
         end if;
@@ -369,11 +370,11 @@ begin
     elsif clk'event and clk = '1' then
         if write_stop = '0' then
             wea0 <= '0';
-        elsif addra = x"3FFF" and wea0 = '1' and data_in_valid = '1' then
+        elsif addra = x"3FFFF" and wea0 = '1' and data_in_valid = '1' then
             wea0 <= '0';
         elsif flag_rdy_up = '1' then
             wea0 <= '1';
-        elsif addra = x"3FFF" and wea1 = '1' and data_in_valid = '1' then
+        elsif addra = x"3FFFF" and wea1 = '1' and data_in_valid = '1' then
             wea0 <= '1';
         end if;
     end if;
@@ -387,9 +388,9 @@ begin
     elsif clk'event and clk = '1' then
         if write_stop = '0' then
             wea1 <= '0';
-        elsif addra = x"3FFF" and wea1 = '1' and data_in_valid = '1' then
+        elsif addra = x"3FFFF" and wea1 = '1' and data_in_valid = '1' then
             wea1 <= '0';
-        elsif addra = x"3FFF" and wea0 = '1' and data_in_valid = '1' then
+        elsif addra = x"3FFFF" and wea0 = '1' and data_in_valid = '1' then
             wea1 <= '1';
         end if;
     end if;
@@ -403,7 +404,7 @@ begin
     elsif clk'event and clk = '1' then
         if write_stop = '0' then
             addra <= (others => '0');
-        elsif addra = x"3FFF" and data_in_valid = '1' then
+        elsif addra = x"3FFFF" and data_in_valid = '1' then
             addra <= (others => '0');
         elsif (wea0 = '1' or wea1 = '1') and data_in_valid = '1'then
             addra <= addra + 1;
@@ -434,7 +435,7 @@ begin
             irq1_internal <= '0';
         elsif cnt_irq_12 = x"C" then
             irq1_internal <= '0';
-        elsif wea0 = '1' and addra = x"3FFF" and data_in_valid = '1' then
+        elsif wea0 = '1' and addra = x"3FFFF" and data_in_valid = '1' then
             irq1_internal <= '1';
         end if;
     end if;
@@ -449,7 +450,7 @@ begin
             irq2_internal <= '0';
         elsif cnt_irq_12 = x"C" then
             irq2_internal <= '0';
-        elsif wea1 = '1' and addra = x"3FFF" and data_in_valid = '1' then
+        elsif wea1 = '1' and addra = x"3FFFF" and data_in_valid = '1' then
             irq2_internal <= '1';
         end if;
     end if;
@@ -483,6 +484,10 @@ port map(
     probe_out3 => flag_half
 );
 
+--- dina 补零到 512bit 送 ila（A 口已改成 32bit，ILA 的 probe14 仍是 512bit）---
+dina_ila(31 downto 0) <= dina;
+dina_ila(511 downto 32) <= (others => '0');
+
 U4 : ila_pcie_irq_ctrl
 port map(
     clk => clk,
@@ -500,7 +505,7 @@ port map(
     probe11 => addra       ,
     probe12 => wea0        ,
     probe13 => wea1        ,
-    probe14 => dina,
+    probe14 => dina_ila,
     probe15 => data_in_valid,
     probe16 => wea0_rising,
     probe17 => wea1_rising,
@@ -512,7 +517,7 @@ PORT MAP (
     clka => clk,
     wea => wea0,
     ena => data_in_valid,
-    addra => addra(13 downto 0),
+    addra => addra(17 downto 0),
     dina => dina,
     clkb => clkb0,
     addrb => addrb0(19 downto 6),
@@ -524,7 +529,7 @@ PORT MAP (
     clka => clk,
     wea => wea1,
     ena => data_in_valid,
-    addra => addra(13 downto 0),
+    addra => addra(17 downto 0),
     dina => dina,
     clkb => clkb1,
     addrb => addrb1(19 downto 6),
