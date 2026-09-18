@@ -150,7 +150,7 @@ COMPONENT FIR_decimation_D4A
     s_axis_data_tready : OUT STD_LOGIC;
     s_axis_data_tdata : IN STD_LOGIC_VECTOR(15 DOWNTO 0);
     m_axis_data_tvalid : OUT STD_LOGIC;
-    m_axis_data_tdata : OUT STD_LOGIC_VECTOR(39 DOWNTO 0) );
+    m_axis_data_tdata : OUT STD_LOGIC_VECTOR(39 DOWNTO 0) );   -- 字节对齐: 输出宽度34 -> 端口40, 有效数据(33 downto 0)
 END COMPONENT;
 signal dout_I_internal_D4A : std_logic_vector(39 downto 0);
 signal dout_Q_internal_D4A : std_logic_vector(39 downto 0);
@@ -167,7 +167,7 @@ COMPONENT FIR_decimation_D8
     s_axis_data_tready : OUT STD_LOGIC;
     s_axis_data_tdata : IN STD_LOGIC_VECTOR(127 DOWNTO 0);
     m_axis_data_tvalid : OUT STD_LOGIC;
-    m_axis_data_tdata : OUT STD_LOGIC_VECTOR(39 DOWNTO 0)
+    m_axis_data_tdata : OUT STD_LOGIC_VECTOR(39 DOWNTO 0)       -- 字节对齐: 输出宽度36 -> 端口40, 有效数据(35 downto 0)
   );
 END COMPONENT;
 signal data_dds_out_I : std_logic_vector(127 downto 0);
@@ -176,6 +176,8 @@ signal data_200M_I    : std_logic_vector(39 downto 0);
 signal data_200M_Q    : std_logic_vector(39 downto 0);
 signal data_200M_I_delay    : std_logic_vector(16 downto 0);
 signal data_200M_Q_delay    : std_logic_vector(16 downto 0);
+
+signal data_out_internal : std_logic_vector(31 downto 0);   -- data_out 是 out 端口，VHDL-93 不能读，用这个中转给 ila
 
 COMPONENT ila_data_dds_downsample
 PORT (
@@ -254,6 +256,25 @@ END COMPONENT  ;
 --	probe1 : IN STD_LOGIC_VECTOR(15 DOWNTO 0)
 --);
 --END COMPONENT  ;
+
+--- FIR 链路观察 ila：看 D8(36bit) / D4A(34bit) 全精度输出里信号落在哪几位，用来核对截位位置 -----
+--- 只做调试用；不需要时把这段 component、下面的 U24 例化和 data_out_internal 一起删掉即可
+COMPONENT ila_data_pcie_fir
+PORT (
+    clk : IN STD_LOGIC;
+    probe0  : IN STD_LOGIC_VECTOR(35 DOWNTO 0);   -- data_200M_I(35:0)           D8 I 有效数据 36bit (端口40bit)
+    probe1  : IN STD_LOGIC_VECTOR(35 DOWNTO 0);   -- data_200M_Q(35:0)           D8 Q 有效数据 36bit (端口40bit)
+    probe2  : IN STD_LOGIC_VECTOR(16 DOWNTO 0);   -- data_200M_I_delay           D8 截位后 (25:9)+1
+    probe3  : IN STD_LOGIC_VECTOR(16 DOWNTO 0);   -- data_200M_Q_delay           D8 截位后 (25:9)+1
+    probe4  : IN STD_LOGIC_VECTOR(33 DOWNTO 0);   -- dout_I_internal_D4A(33:0)   D4A I 有效数据 34bit (端口40bit)
+    probe5  : IN STD_LOGIC_VECTOR(33 DOWNTO 0);   -- dout_Q_internal_D4A(33:0)   D4A Q 有效数据 34bit (端口40bit)
+    probe6  : IN STD_LOGIC_VECTOR(16 DOWNTO 0);   -- dout_I_internal_D4A_delay   D4A 截位后 (26:10)+1
+    probe7  : IN STD_LOGIC_VECTOR(16 DOWNTO 0);   -- dout_Q_internal_D4A_delay   D4A 截位后 (26:10)+1
+    probe8  : IN STD_LOGIC_VECTOR(31 DOWNTO 0);   -- data_out_internal           最终输出 (Q & I)
+    probe9  : IN STD_LOGIC;                       -- rdy_FIR_decimation_D4A
+    probe10 : IN STD_LOGIC                        -- rdy_FIR_decimation_D4A_delay (= data_out_valid 的前一拍)
+);
+END COMPONENT;
 
 begin
 
@@ -436,7 +457,7 @@ begin
     if reset = '0' then
         data_200M_I_delay <= (others => '0');
     elsif clk'event and clk = '1' then
-        data_200M_I_delay <= data_200M_I(29 downto 13) + 1;
+        data_200M_I_delay <= data_200M_I(25 downto 9) + 1;
     end if;
 end process;
 
@@ -445,7 +466,7 @@ begin
     if reset = '0' then
         data_200M_Q_delay <= (others => '0');
     elsif clk'event and clk = '1' then
-        data_200M_Q_delay <= data_200M_Q(29 downto 13) + 1;
+        data_200M_Q_delay <= data_200M_Q(25 downto 9) + 1;
     end if;
 end process;
 
@@ -469,7 +490,7 @@ begin
     if reset = '0' then
         dout_I_internal_D4A_delay <= (others => '0');
     elsif clk'event and clk = '1' then
-        dout_I_internal_D4A_delay <= dout_I_internal_D4A(32 downto 16) + 1;
+        dout_I_internal_D4A_delay <= dout_I_internal_D4A(26 downto 10) + 1;
     end if;
 end process;
 
@@ -478,7 +499,7 @@ begin
     if reset = '0' then
         dout_Q_internal_D4A_delay <= (others => '0');
     elsif clk'event and clk = '1' then
-        dout_Q_internal_D4A_delay <= dout_Q_internal_D4A(32 downto 16) + 1;
+        dout_Q_internal_D4A_delay <= dout_Q_internal_D4A(26 downto 10) + 1;
     end if;
 end process;  
 
@@ -725,9 +746,27 @@ begin
     end if;
 end process;
 
-data_out <= dout_Q_internal_D4A_delay(16 downto 1) & dout_I_internal_D4A_delay(16 downto 1);
+data_out_internal <= dout_Q_internal_D4A_delay(16 downto 1) & dout_I_internal_D4A_delay(16 downto 1);
+data_out <= data_out_internal;
                         
                                                                                                                                                                                      
                                                                                                                                          
+
+--- FIR 链路观察 ila（调试用，可整段删除）-----------------------------------------------------
+U24 : ila_data_pcie_fir
+port map(
+    clk => clk,
+    probe0  => data_200M_I(35 downto 0),
+    probe1  => data_200M_Q(35 downto 0),
+    probe2  => data_200M_I_delay,
+    probe3  => data_200M_Q_delay,
+    probe4  => dout_I_internal_D4A(33 downto 0),
+    probe5  => dout_Q_internal_D4A(33 downto 0),
+    probe6  => dout_I_internal_D4A_delay,
+    probe7  => dout_Q_internal_D4A_delay,
+    probe8  => data_out_internal,
+    probe9  => rdy_FIR_decimation_D4A,
+    probe10 => rdy_FIR_decimation_D4A_delay
+);
 
 end Behavioral;
