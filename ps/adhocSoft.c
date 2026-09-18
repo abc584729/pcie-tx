@@ -1510,13 +1510,6 @@ void ProcCmd(unsigned char *pBuf, U16 len)
 //20260902 edit
 		// 发射启动
 		case 135:
-			/* tx_start.py：bpsk 单次发/循环发 + 符号数，然后 tx_init() 开播。
-			 * 频点/衰减/使能/速率取 case 133 存下的全局量，起始时基取 case 136 存下的。
-			 * 符号数循环发下是"每轮发多少个"：数满回到第 0 个符号接着下一轮（0 当作整表，
-			 * 和上电默认一致）；单次发下数满就停（0 表示一个都不发）。
-			 * 要再发一次：重发本命令最干净（tx_init() 里的 TX_REG_RESET 脉冲会把读指针、
-			 * 符号计数器、done 和时基一起清掉）；把 TX_REG_RAM_EN 拉低一下也可以，rd_en
-			 * 拉低同样会清读指针和符号计数，再拉高就从第 0 个符号重新发（case 136 走这条）。 */
 		{
 			double size_kb = 0.0;
 
@@ -1581,6 +1574,13 @@ void ProcCmd(unsigned char *pBuf, U16 len)
 			printf("tx bpsk time sel: %d (first symbol at timebase position %d), "
 			       "applied at runtime without reset.\r\n",
 			       (int)tx_bpsk_time_sel, (int)tx_bpsk_time_sel + 1);
+			break;
+//20260902 edit
+		// 停止发射：只关门停读，不复位，时基照常走
+		case 137:
+			emc_write(TX_REG_RAM_EN, 0);
+			printf("tx stopped: ram_en = 0 (read pointer / symbol count cleared, "
+			       "timebase still running).\r\n");
 			break;
 //20260902
 		default:

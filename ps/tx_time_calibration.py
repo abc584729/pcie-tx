@@ -28,10 +28,10 @@ socket has no frame header and no CRC):
     field). Only the PS path uses it -- in VIO mode the top level ties it to 0.
 
     This applies *at runtime*, with no reset anywhere: 0x718 is written live
-    using stop -> write -> start (set_bpsk_time_sel_runtime() in pcie_tx.c).
-    TX_REG_RESET must never be pulsed here -- the symbol divider and the
-    timebase counter are cleared only by rst_n, so a reset would zero the
-    reference timebase and the calibration would be meaningless. Instead:
+    using stop -> write -> start, three plain emc_write() calls in case 136 of
+    adhocSoft.c. TX_REG_RESET must never be pulsed here -- the symbol divider
+    and the timebase counter are cleared only by rst_n, so a reset would zero
+    the reference timebase and the calibration would be meaningless. Instead:
 
         1. 0x702 = 0   lower ram_en -> the read gate closes on the next clock
                        and output stops; the divider and the timebase keep
@@ -45,12 +45,15 @@ socket has no frame header and no CRC):
     output can take up to one full lap (1024 symbols; 2.276 ms at 450k,
     2.56 ms at 400k) to resume.
 
-    Caveat -- single-shot mode: a burst that already finished holds `done`
-    (cleared only by rst_n too), so stop/start will not begin it again. In
-    single-shot, restart with tx_start.py (case 135) instead.
+    Single-shot is fine too: `rptr`, `sym_cnt` and `done` are all cleared by
+    `!rst_n || ~rd_en` in rtl/bpsk_ram.v, so this stop/start pair restarts a
+    finished burst as well -- `done` is dropped and the read pointer goes back
+    to symbol 0. No need for tx_start.py (case 135).
 
-    tx_init() now writes the global (not a hardcoded 0), so whatever this
-    command last set survives a later tx_start.py.
+    But tx_init() writes set_bpsk_time_sel(0), not the global, so whatever
+    this command last set does NOT survive a later tx_start.py: a restart puts
+    the gate back at timebase position 0. Re-send this command after one if the
+    calibration still matters.
 
     Target: node control port UDP 192.168.1.10:14147 (the adhocCtrl
     listening port, see adhocSoft.c).
