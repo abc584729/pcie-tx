@@ -2,14 +2,14 @@
 """
 tx_stop.py
 Send the UDP "stop transmission" command packet to a node, packed according
-to case 137 of the //20260902 edit in adhocSoft.c.
+to case 136 of the //20260902 edit in adhocSoft.c.
 
-case 137 payload layout (UDP payload == raw pBuf; the Ethernet control
+case 136 payload layout (UDP payload == raw pBuf; the Ethernet control
 socket has no frame header and no CRC):
 
     offset   field                      type
     ---------------------------------------------
-    0        command = 137              u8
+    0        command = 136              u8
 
     Total length = 1 byte. There is no payload -- the command *is* the action,
     so a short packet cannot be a half-written one.
@@ -39,11 +39,10 @@ To transmit again, either
     carries straight on (the gate reopens only on the single clock where
     cnt_1024 == time_sel, so resumption can take up to one lap: 1024 symbols,
     ~2.276 ms at 450k / ~2.56 ms at 400k). No script here sends that write on
-    its own -- case 136 does it as part of its stop/write/start; or
-  * run tx_start.py (case 135), which pulses TX_REG_RESET inside tx_init().
-    Same effect, but the timebase restarts from 0 and tx_init() writes
-    time_sel = 0, so a position set with tx_time_calibration.py (case 136)
-    does not survive a stop/start pair.
+    its own -- tx_start() always pulses the reset; or
+  * run tx_start.py (case 135), which pulses TX_REG_RESET inside tx_start().
+    Same effect, but the timebase restarts from 0, so the burst comes up at
+    the --tsel position of that packet rather than where the previous one sat.
 
 Target: node control port UDP 192.168.1.10:14147 (the adhocCtrl
 listening port, see adhocSoft.c).
@@ -57,13 +56,13 @@ Examples:
 import argparse
 import socket
 
-CMD_TX_STOP = 137
+CMD_TX_STOP = 136
 
 PKT_LEN = 1             # the command byte is the whole packet
 
 
 def build_packet():
-    """Pack the payload per the case 137 layout; return bytes(1)."""
+    """Pack the payload per the case 136 layout; return bytes(1)."""
     return bytes([CMD_TX_STOP])
 
 
@@ -79,7 +78,7 @@ def hex_dump(data):
 
 def main():
     ap = argparse.ArgumentParser(
-        description='Send the //20260902 case 137 stop command: close the RAM '
+        description='Send the //20260902 case 136 stop command: close the RAM '
                     'read gate (0x702 = 0). No reset, so the transmit timebase '
                     'keeps running.')
     ap.add_argument('--ip', default='192.168.1.10', help='node IP (default 192.168.1.10)')
@@ -89,14 +88,14 @@ def main():
 
     pkt = build_packet()
 
-    print('=== case 137 tx stop pkt (len=%d) ===' % len(pkt))
+    print('=== case 136 tx stop pkt (len=%d) ===' % len(pkt))
     print('cmd     : %d' % pkt[0])
     print('action  : emc_write(TX_REG_RAM_EN, 0)  -- read gate closed, no reset')
     print('effect  : output mutes as the filter chain drains; timebase keeps '
           'running; read pointer and symbol count cleared, so the next start '
           'begins at symbol 0.')
-    print('restart : tx_start.py (case 135) -- note it resets the timebase and '
-          'writes time_sel = 0.')
+    print('restart : tx_start.py (case 135) -- note it resets the timebase, so '
+          'the next burst starts at that packet\'s --tsel position.')
     print(hex_dump(pkt))
 
     if args.dry_run:

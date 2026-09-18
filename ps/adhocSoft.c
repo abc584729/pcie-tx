@@ -77,7 +77,7 @@ U8 GPSEnable = 0;
 U8 allNodesQuitFlag = 0;
 
 //20260902 edit
-/* defaults keep legacy tx_init: 100/200MHz, 0dB, channels on */
+/* defaults keep legacy tx_start: 100/200MHz, 0dB, channels on */
 double fre_bpsk = 100;
 double fre_qpsk = 200;
 double atten_bpsk = 0;
@@ -86,11 +86,12 @@ u8 ctrl_bpsk = 1;
 u8 ctrl_qpsk = 1;
 u8 tx_rate_sel = 0;    /* 速率选择：0 -> bpsk 450k / qpsk 4.5M，1 -> bpsk 400k / qpsk 6.667M */
 u8  tx_bpsk_single_shot = 0;    /* bpsk 发射模式：0 循环发（默认），1 单次发。
-                                 * case 135（tx_start.py）配置，tx_init() 写下去（默认值和不带参数一致） */
+                                 * case 135（tx_start.py）配置，tx_start() 写下去（默认值和不带参数一致） */
 u32 tx_bpsk_sym_num = 0;        /* bpsk 单次发要发的符号数，0 = 不发。case 135 里给的是数据文件大小(kB)，
                                  * 按 BPSK 每符号 1 bit 换算而来（kB x 1024 x 8）；上限 23 位 = 8388607 */
 u16 tx_bpsk_time_sel = 0;       /* bpsk 起始时基：0..1023，1024 个符号一圈，时基走到这个值才开读门
-                                 * （0 = 尽快开始）。case 136 的第 1..2 字节（u16 小端） */
+                                 * （0 = 尽快开始）。case 135 的第 10..11 字节（u16 小端），
+                                 * 和单次发/符号数一起解出来，在 tx_start() 复位窗口里写下去 */
 //20260902
 
 #if 1
@@ -218,7 +219,7 @@ void main_thread(void)
 	//emc_write(0x0A6, 0); //配置完成
 
 	// add by me
-//	tx_init();
+//	tx_start();
 	// end
 	
 	emc_write(0x174, 15);	//配置跳时跳频使能控制
@@ -1514,9 +1515,9 @@ void ProcCmd(unsigned char *pBuf, U16 len)
 			double size_kb = 0.0;
 
 			/* 新命令没有老包要兼容，超长/超短的包都不认 —— 宁可丢包也不猜 */
-			if (len < 10)
+			if (len < 12)
 			{
-				printf("tx start: bad len %d (expect 10), dropped\r\n", len);
+				printf("tx start: bad len %d (expect 12), dropped\r\n", len);
 				break;
 			}
 
@@ -1538,28 +1539,10 @@ void ProcCmd(unsigned char *pBuf, U16 len)
 			}
 			tx_bpsk_sym_num = (u32)(size_kb * 8192.0 + 0.5);    /* kB -> 字节 -> bit */
 
-			printf("tx bpsk burst: size = %.6f kB -> %d bits (symbols)\r\n",
-			       size_kb, (int)tx_bpsk_sym_num);
-			printf("tx bpsk burst: sym_num = %d, single_shot = %d.\r\n",
-			       (int)tx_bpsk_sym_num, (int)tx_bpsk_single_shot);
-
-			tx_init();
-
-			printf("tx started: rate = %d, time_sel = %d "
-			       "(first symbol at timebase position %d).\r\n",
-			       (int)tx_rate_sel, (int)tx_bpsk_time_sel, (int)tx_bpsk_time_sel + 1);
-			break;
-		}
-//20260902 edit
-		// 时间校准
-		case 136:
-			if (len < 3)
-			{
-				printf("tx time sel: bad len %d (expect 3), dropped\r\n", len);
-				break;
-			}
-
-			tx_bpsk_time_sel = (u16)(pBuf[1] | ((u16)pBuf[2] << 8));
+			/* 10..11 字节 u16 小端：起始时基 0..1023，时基走到这个值才开读门
+			 * （0 = 尽快开始），实际第一个符号落在 time_sel + 1。10 位寄存器，
+			 * 超范围钳到 1023 而不是丢包 —— 长度对就认，值不合法也别空发。 */
+			tx_bpsk_time_sel = (u16)(pBuf[10] | ((u16)pBuf[11] << 8));
 			if (tx_bpsk_time_sel > 1023)
 			{
 				printf("tx bpsk time sel: %d out of range (0..1023), clamped\r\n",
@@ -1567,17 +1550,21 @@ void ProcCmd(unsigned char *pBuf, U16 len)
 				tx_bpsk_time_sel = 1023;
 			}
 
-			emc_write(TX_REG_RAM_EN, 0); 
-			set_bpsk_time_sel(tx_bpsk_time_sel);    
-    		emc_write(TX_REG_RAM_EN, 1); 
+			printf("tx bpsk burst: size = %.6f kB -> %d bits (symbols)\r\n",
+			       size_kb, (int)tx_bpsk_sym_num);
+			printf("tx bpsk burst: sym_num = %d, single_shot = %d.\r\n",
+			       (int)tx_bpsk_sym_num, (int)tx_bpsk_single_shot);
 
-			printf("tx bpsk time sel: %d (first symbol at timebase position %d), "
-			       "applied at runtime without reset.\r\n",
-			       (int)tx_bpsk_time_sel, (int)tx_bpsk_time_sel + 1);
+			tx_start();
+
+			printf("tx started: rate = %d, time_sel = %d "
+			       "(first symbol at timebase position %d).\r\n",
+			       (int)tx_rate_sel, (int)tx_bpsk_time_sel, (int)tx_bpsk_time_sel + 1);
 			break;
+		}
 //20260902 edit
 		// 停止发射：只关门停读，不复位，时基照常走
-		case 137:
+		case 136:
 			emc_write(TX_REG_RAM_EN, 0);
 			printf("tx stopped: ram_en = 0 (read pointer / symbol count cleared, "
 			       "timebase still running).\r\n");

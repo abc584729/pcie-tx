@@ -59,7 +59,7 @@ void set_qpsk_enable(unsigned char en);
  * done 和时基都不受影响，正在发的这一串也不中断，改完下一拍就生效。
  * case 133（tx_configure.py）走这条路径，随时可以重发。
  * 单次发/循环发、符号数、起始时基不在这里：那三项必须在复位窗口里写，
- * 只能由 tx_init() 落下去。
+ * 只能由 tx_start() 落下去。
  */
 void tx_apply_config(void);
 
@@ -72,9 +72,9 @@ void tx_apply_config(void);
  *               下一轮，一直循环；1 = 单次发：数满就停（done 锁住）。
  * 注意：写 sym_num 要分两次写寄存器，不是原子操作；请在 tx 复位期间
  *       （emc_write(TX_REG_RESET, 0) 之后、写 1 之前）调用。
- *       要重发有两种办法：脉冲一次 TX_REG_RESET，或者把 TX_REG_RAM_EN 拉低一下
- *       —— rd_en 拉低会一并清掉读指针和符号计数，再拉高就是从第 0 个符号
- *       重新发，不需要复位（case 136 走的就是这条）。
+ *       要重发有两种办法：脉冲一次 TX_REG_RESET（tx_start.py 就是这条），或者把
+ *       TX_REG_RAM_EN 拉低一下 —— rd_en 拉低会一并清掉读指针和符号计数，再拉高
+ *       就是从第 0 个符号重新发，不需要复位。
  */
 void set_bpsk_burst(unsigned long sym_num, unsigned char single_shot);
 
@@ -84,18 +84,9 @@ void set_bpsk_burst(unsigned long sym_num, unsigned char single_shot);
  *        脉冲用来开读门、本身不读表：实际发出的第一个符号落在时基位置
  *        tsel+1。写 0 = 复位后第一拍就开门，等于尽快开始。
  *        时基只在 rst_n（tx 复位）时清零，写晚了要等这一圈走完才轮到这个值。
- *        所以 tx_init()（case 135）在复位窗口里写它。
+ *        所以 tx_start()（case 135）在复位窗口里写它。
  */
 void set_bpsk_time_sel(unsigned short tsel);
-
-/*
- * 运行中改起始时基 —— case 136（tx_time_calibration.py）。
- * 停发（0x702=0）-> 写 0x718 -> 重发（0x702=1），**不碰 TX_REG_RESET**，
- * 因为 count/cnt_1024 只由 rst_n 清，一复位参考时基就变了。
- * 代价：重新开门要等时基转到新的 tsel，最多 1024 个符号（450k 档 2.276ms）。
- * 单次发跑完 done 锁住之后，这个函数不会让这一串重新开始，要重发 case 135。
- */
-void set_bpsk_time_sel_runtime(unsigned short tsel);
 
 /* ================= RAM 符号表写函数 ================= */
 
@@ -106,6 +97,6 @@ void write_bpsk_ram(const unsigned short *data, unsigned long len);
 void write_qpsk_ram(const unsigned short *data, unsigned long len);
 
 /* 发射初始化 */
-void tx_init(void);
+void tx_start(void);
 
 #endif /* PCIE_TX_H */

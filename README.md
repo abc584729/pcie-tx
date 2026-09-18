@@ -36,13 +36,12 @@ pcie-tx/
 │   ├── arm_interface_write_1.vhd        # ARM 写接口
 │   ├── pcie_tx.h                        # 发射系统寄存器地址定义（0x700 起）
 │   ├── pcie_tx.c                        # 中频频点配置与发射初始化
-│   ├── adhocSoft.c                      # 自组网协议栈（UDP 控制命令 case 133/134/135/136/137）
+│   ├── adhocSoft.c                      # 自组网协议栈（UDP 控制命令 case 133/134/135/136）
 │   ├── Si5340_Data.h                    # Si5341 时钟芯片配置寄存器表
 │   ├── tx_configure.py                  # 上位机 UDP 配置命令（case 133：频点/衰减/使能/速率）
-│   ├── tx_start.py                      # 上位机 UDP 开播命令（case 135：单次发/循环发 + 符号数）
-│   ├── tx_time_calibration.py           # 上位机 UDP 起始时基命令（case 136：time_sel）
-│   ├── tx_stop.py                       # 上位机 UDP 停发命令（case 137：0x702 = 0）
-│   ├── send_symbol_table.py             # 符号表分片上传（case 134，64 包）
+│   ├── tx_start.py                      # 上位机 UDP 开播命令（case 135：单次发/循环发 + 符号数 + 起始时基）
+│   ├── tx_stop.py                       # 上位机 UDP 停发命令（case 136：0x702 = 0）
+│   ├── tx_ram_configure.py              # 符号表分片上传（case 134，64 包）
 │   └── gen_symbol_table.py              # 生成随机符号表文件（.bin）
 │
 ├── matlab/                              # Simulink 模型与滤波器设计
@@ -167,9 +166,9 @@ pcie-tx/
 ```bash
 python gen_symbol_table.py -o symbols.bin --table-sel bpsk            # 1. 生成随机表
 python tx_configure.py --bpsk-freq 100 --qpsk-freq 200                # 2. 配置频点/衰减/使能/速率（立即生效）
-python send_symbol_table.py --table symbols.bin --table-sel bpsk      # 3. 灌 BPSK 表
+python tx_ram_configure.py --table symbols.bin --table-sel bpsk      # 3. 灌 BPSK 表
 python gen_symbol_table.py -o symbols.bin --table-sel qpsk            #    换 QPSK 再生成
-python send_symbol_table.py --table symbols.bin --table-sel qpsk      #    灌 QPSK 表
+python tx_ram_configure.py --table symbols.bin --table-sel qpsk      #    灌 QPSK 表
 python tx_start.py --single 0                                         # 4. 开播（循环发）
 python tx_stop.py                                                     # 5. 停发（不复位，时基照常走）
 ```
@@ -178,15 +177,14 @@ python tx_stop.py                                                     # 5. 停�
 |------|--------|
 | `ps/gen_symbol_table.py` | 生成随机符号表文件（`.bin`，大小任意、**上限 512 KB**：`--table-sel` 满表 / `--words` / `--bytes`，支持 `512K` 后缀，种子可复现） |
 | `ps/tx_configure.py` | 发 case 133：频点 / 衰减 / 使能 / 速率。**运行中直接下发、立即生效**（`tx_apply_config()`），不碰 `TX_REG_RESET`、不中断正在发的包；但**不开播、不重启** |
-| `ps/send_symbol_table.py` | 发 case 134：整表分片、每包 512 字 = 1028 字节，BPSK **512 包** / QPSK **64 包**；`--table-sel` 必填，一次一张 |
-| `ps/tx_start.py` | 发 case 135：**循环发或单次发**（`--single`、`--size`，见 §3.3），然后板上 `tx_init()` **开播** |
-| `ps/tx_time_calibration.py` | 发 case 136：起始时基 `time_sel`（`--tsel`，见 §3.3）。**运行中生效**：停发 → 写 `0x718` → 重发，不复位 |
-| `ps/tx_stop.py` | 发 case 137：**停发**，就一笔 `emc_write(TX_REG_RAM_EN, 0)`。不复位，时基照常走；`rd_en` 拉低会一并清掉读指针和符号计数，所以下次开播必然从第 0 个符号开始 |
+| `ps/tx_ram_configure.py` | 发 case 134：整表分片、每包 512 字 = 1028 字节，BPSK **512 包** / QPSK **64 包**；`--table-sel` 必填，一次一张 |
+| `ps/tx_start.py` | 发 case 135：**循环发或单次发**（`--single`、`--size`）**和起始时基**（`--tsel`，见 §3.3），然后板上 `tx_start()` **开播** |
+| `ps/tx_stop.py` | 发 case 136：**停发**，就一笔 `emc_write(TX_REG_RAM_EN, 0)`。不复位，时基照常走；`rd_en` 拉低会一并清掉读指针和符号计数，所以下次开播必然从第 0 个符号开始 |
 
 `tx_configure.py` 是唯一可以**边发边改**的：频点/衰减/速率/使能都在运行时可改，改完下一拍
 就生效，不需要停发。`rate_sel` 例外 —— 它同时改符号速率和 add 的截位方式，切了要重新灌表。
 
-开播（`tx_init()`）是另一回事 —— 复位读指针到 0、应用频点衰减、开 RAM 读
+开播（`tx_start()`）是另一回事 —— 复位读指针到 0、应用频点衰减、开 RAM 读
 使能。所以开播时写指针和读指针都是 0，表必然从第一个字开始播。板上把整表所有包**全部
 收进缓冲、到齐才写 RAM**，因此丢包或中断只是表不落地，RAM 一个字都不动，重跑一遍即可。
 
@@ -305,10 +303,9 @@ python gen_symbol_table.py -o part.bin --bytes 256K       # 256 KiB = 131072 字
 
 **上位机发射时序**
 
-这几个字段原来挂在 case 133 包尾（总长 36 → 47 字节），现在已经拆成两个独立命令：
-`bpsk_single_shot` / `bpsk_size_kb` 走 **case 135**（`tx_start.py`），
-`bpsk_time_sel` 走 **case 136**（`tx_time_calibration.py`）。case 133 只认前 36 字节，
-36 字节以后的字段一律忽略：
+这几个字段原来挂在 case 133 包尾（总长 36 → 47 字节），现在整个搬到 **case 135**
+（`tx_start.py`）：`bpsk_single_shot` / `bpsk_size_kb` / `bpsk_time_sel` 三段连在一起，
+一条命令既是"参数"也是"开播"。case 133 只认前 36 字节，36 字节以后的字段一律忽略：
 
 ```bash
 python tx_configure.py --bpsk-freq 100 --qpsk-freq 200   # 配置（立即下发，不重启）
@@ -317,34 +314,28 @@ python tx_start.py --single 1 --size full     # 发满整表（512 kB = 4194304 
 python tx_start.py --single 1 --size 1.953125 # 2000 字节的文件
 python tx_start.py --single 0 --size 0        # 循环发整表（默认，和改动前一样）
 python tx_start.py --single 0 --size 1        # 循环发：每一轮只发 1 kB，然后回到表头
-python tx_time_calibration.py --tsel 500      # 时基走到 500 才开门（详见下面 time_sel 一节）
-python tx_start.py --single 0 --size 0        # 再开播，0x718 就是上一条设的 500
+python tx_start.py --tsel 500                 # 时基走到 500 才开门（详见下面 time_sel 一节）
+python tx_start.py --single 1 --size 256 --tsel 500   # 三样一起给
 ```
 
 `tx_configure.py` 那一条**发了就生效**（`tx_apply_config()` 直接写寄存器），不用再补一条
-`tx_start.py`；后两条（`--single` / `--tsel`）则是"参数+开播"里的参数部分，必须跟一条
-`tx_start.py` 才用得上。
+`tx_start.py`；`tx_start.py` 里的三个参数则都是"参数+开播"——**参数只在这次开播时起作用**，
+想改就得重发一条带新参数的 `tx_start.py`（`tx_start()` 会复位，见下面 `time_sel` 一节）。
 
-**case 135 包格式**（`tx_start.py`，总长 10 字节）：
+**case 135 包格式**（`tx_start.py`，总长 12 字节）：
 
 | 偏移 | 字段 | 类型 |
 |------|------|------|
 | 0 | 命令 = 135 | u8 |
 | 1 | `bpsk_single_shot` | u8，0 = 循环发，1 = 单次发 |
 | 2..9 | `bpsk_size_kb` | double（8B，小端 IEEE-754），数据文件大小，**单位 kB（1024 进制）** |
+| 10..11 | `bpsk_time_sel` | u16（2B，小端），0..1023，起始时基，见下面 `time_sel` 一节 |
 
-**case 136 包格式**（`tx_time_calibration.py`，总长 3 字节）：
+**case 136 包格式**（`tx_stop.py`，总长 1 字节）：
 
 | 偏移 | 字段 | 类型 |
 |------|------|------|
 | 0 | 命令 = 136 | u8 |
-| 1..2 | `bpsk_time_sel` | u16（2B，小端），0..1023，起始时基，见下面 `time_sel` 一节 |
-
-**case 137 包格式**（`tx_stop.py`，总长 1 字节）：
-
-| 偏移 | 字段 | 类型 |
-|------|------|------|
-| 0 | 命令 = 137 | u8 |
 
 **这个包里没有载荷 —— 命令本身就是动作**：板上就一笔 `emc_write(TX_REG_RAM_EN, 0)`，
 把 `0x702` 拉低。所以它不发"停止"参数，也不会因为字段没写完而半途生效。
@@ -363,15 +354,15 @@ python tx_start.py --single 0 --size 0        # 再开播，0x718 就是上一�
 
 ```bash
 python tx_stop.py                             # 停发（0x702 = 0）
-python tx_start.py --single 0                 # 重开播（tx_init() 脉冲 0x700，时基从 0 重来）
+python tx_start.py --single 0                 # 重开播（tx_start() 脉冲 0x700，时基从 0 重来）
 ```
 
 - **只写 `0x702` = 1**：一笔写、不复位，时基接着走，停多久都不影响相位。代价是开门窗口
   只有一拍宽、一圈才来一次，所以最多等一圈（1024 个符号，450k 档 2.276 ms）才恢复发数。
-  本仓库里没有单独发这笔写的脚本 —— case 136 是把它夹在停发/重发之间的。
-- **`tx_start.py`（case 135）**：`tx_init()` 里会脉冲 `0x700`，效果一样，但**时基从 0
-  重新开始**，而且 `tx_init()` 里写的是 `set_bpsk_time_sel(0)`，所以 `--tsel` 校准值
-  不会跨过这一对停/发。
+  本仓库里没有单独发这笔写的脚本 —— `tx_start.py` 走的是下面那条复位路径。
+- **`tx_start.py`（case 135）**：`tx_start()` 里会脉冲 `0x700`，效果一样，但**时基从 0
+  重新开始**，`0x718` 也重新写一遍（写的就是这条包里的 `--tsel`）—— 所以连续性靠复位的
+  确定性，不靠"接着上一圈走"。
 
 **这里给的是"数据文件有多大"，不是符号数** —— 板上自己按 BPSK 每符号 1 bit 换算，所以
 "灌了多大就发多长"不用人工乘。
@@ -387,23 +378,22 @@ python tx_start.py --single 0                 # 重开播（tx_init() 脉冲 0x7
 `--size` 收十进制、`K`/`M` 后缀或 `full`（= 512，整表）。因为字节数除以 1024 是 2 的幂
 缩放、double 能精确表示，所以**任何文件长度都换算得没有误差**（2000 字节 → 1.953125 kB
 → 16000 bit，精确）。23 位符号计数器把上限卡在约 1024 kB，超了脚本直接报错；大于 512 kB
-（表长）会提示"表会重复"。case 135/136 是**新命令，没有老包要兼容**，长度不对直接丢包
-（135 < 10 字节、136 < 3 字节）；case 137 只有命令字节、不看长度，短包也执行。case 133 仍然
-按长度补默认值（≤ 35 字节 → `rate_sel` = 0），35 字节的老包照发不误。
+（表长）会提示"表会重复"。case 135 是**新命令，没有老包要兼容**，长度不对直接丢包
+（< 12 字节）；`--tsel` 超出 0..1023 脚本直接报错，板上则钳到 1023（长度对就认，值不合法
+也不空发）。case 136 只有命令字节、不看长度，短包也执行。case 133 仍然按长度补默认值
+（≤ 35 字节 → `rate_sel` = 0），35 字节的老包照发不误。
 
 > `tx_start.py --single 0` 就是**回到循环发**；循环发下 `--size` 是**每轮的符号数**，
 > 不写（0）等于整表。脚本每次都把 `--size`（含默认 0）显式写进包里，所以"上次设了单次
 > 发、这次忘了带参数"不会把上一次的大小留下来，而是显式回到整表。
 
-> `time_sel` 在 case 136 里是**运行中直接改**的，不用重发 `tx_start.py`：`0x718` 只被
-> `reset_128M` 清、**不随 `TX_REG_RESET` 清**，所以本来就不需要复位窗口 —— 走
-> "停发 → 写 `0x718` → 重发"就够了。全程不脉冲 `0x700`（符号分频器和时基计数器只由
-> `rst_n` 清，一复位参考时基就归零了）。细节见下面 `time_sel` 一节。
->
-> 但重跑 `tx_start.py` 会把校准冲掉：`tx_init()` 里写的是 `set_bpsk_time_sel(0)`，不是
-> `tx_bpsk_time_sel`。所以 case 136 设的 `--tsel` 只在"之后不再重新开播"的前提下有效。
+> `time_sel` 和 `--size` / `--single` 一样，都是**开播参数**：只在这次 `tx_start.py` 里
+> 生效，改它必须重发一条。它和另外两个一起在 `tx_start()` 的复位窗口里落到 `0x718`
+> （第 4 步），`tx_start()` 写的是 `tx_bpsk_time_sel` 这个全局量，不再是写死的 0 —— 所以
+> `--tsel` 每包都按你给的值起播，不会"上一包的校准被冲掉"。代价是**校准值不再跨包延续**：
+> 不写 `--tsel` 就是 0（尽快开始），想要 500 就得每次都带上。细节见下面 `time_sel` 一节。
 
-它落到硬件就是下面这套寄存器时序（`tx_init()`）：
+它落到硬件就是下面这套寄存器时序（`tx_start()`）：
 
 ```
 0. 写 0x704 / 0x706 / 0x70C / 0x70E / 0x710  ← case 133 运行中直接下发（tx_apply_config()）
@@ -416,7 +406,7 @@ python tx_start.py --single 0                 # 重开播（tx_init() 脉冲 0x7
                            自己停，循环发数满回到第 0 个符号接着下一轮
 ```
 
-停发（case 137 / `tx_stop.py`）不在上面这套时序里，就一笔：
+停发（case 136 / `tx_stop.py`）不在上面这套时序里，就一笔：
 
 ```
 7. 写 0x702 = 0          ← 停发。关门停读，**不脉冲 0x700**：count / cnt_1024 照常走，
@@ -424,31 +414,31 @@ python tx_start.py --single 0                 # 重开播（tx_init() 脉冲 0x7
 ```
 
 第 7 步之后再发有两条路：把 `0x702` 写回 1（一笔写、不复位，时基接着走，最多等一圈才重新
-开门 —— case 136 走的就是这条），或者重跑第 2–6 步（`tx_start.py`，会脉冲 `0x700`，时基
-从 0 重来）。
+开门），或者重跑第 2–6 步（`tx_start.py`，会脉冲 `0x700`，时基从 0 重来，`0x718` 也按这条
+包里的 `--tsel` 重新写一遍）。
 
 第 0 步是 case 133 干的，不在这套时序里：它逐条写 DDS 频点、衰减、使能和速率，**全程不碰
 `0x700`**，所以在发射过程中重发也不会打断（读指针、符号计数器、`done`、时基一个都不动）。
-`tx_init()` 里再写一遍（`tx_apply_runtime_cfg()`）图的是"每次起播都从已知状态开始"，尤其是
+`tx_start()` 里再写一遍（`tx_apply_runtime_cfg()`）图的是"每次起播都从已知状态开始"，尤其是
 刚上电 DDS 还没配过的时候。
 
-包里的三个字段在进 `tx_init()` 之前就解好了（`adhocSoft.c` 的 `tx_bpsk_single_shot` /
+包里的三个字段在进 `tx_start()` 之前就解好了（`adhocSoft.c` 的 `tx_bpsk_single_shot` /
 `tx_bpsk_sym_num` / `tx_bpsk_time_sel` 全局量 —— 符号数已经是换算完的 bit 数，和
-`tx_rate_sel` 一个套路）：前两个由 case 135 从包里解出来，第三个由 case 136 解出来。
+`tx_rate_sel` 一个套路）：三个都由 case 135 从包里解出来（第 1、2..9、10..11 字节）。
 第 5 步复位期间由 `set_bpsk_burst()` 和 `set_bpsk_time_sel()` 落到寄存器 —— 也就是第
 2、3、4 步都是在复位窗口里做的，不会踩到半字更新，时基计数器这时也被 hold 在 0，写什么
 值都在前面。
 
 要再发一次就重发一遍 case 135（或只重复 4–5 步）；改符号数就回到 2。**发完后再触发不必
 复位**：`rptr` / `sym_cnt` / `done` 在 `rtl/bpsk_ram.v` 里是 `if(!rst_n || ~rd_en)` 清的，
-把 `0x702` 拉低一下（case 137）再拉高，就是从第 0 个符号干净地重发一遍 —— 单次发跑完
+把 `0x702` 拉低一下（case 136）再拉高，就是从第 0 个符号干净地重发一遍 —— 单次发跑完
 `done` 锁住的情况也一样，不用脉冲 `0x700`。脉冲复位只是把时基也一起归零，需要"相位从头
 算"时才用。
 
 > **写的顺序有讲究**：`sym_num` 是 23 位、分两个 16 位寄存器写，**不是原子操作**。如果
 > 在发射过程中写，中间那一瞬间的 `(旧高 << 16) | 新低` 可能正好等于"已发符号数 + 1"，
 > 把在发的这一串提前截断。所以约定**只在 `TX_REG_RESET = 0` 期间写符号数**（复位期间
-> 时钟被 hold、读脉冲根本不发，改参数绝对安全），`tx_init()` 就是在复位期间调
+> 时钟被 hold、读脉冲根本不发，改参数绝对安全），`tx_start()` 就是在复位期间调
 > `set_bpsk_burst()` 的。`single_shot` 单个 16 位写，是原子的。
 
 `ps/top.vhd` 里这两根信号照 `ram_w_*` 的接法直连 `tx_top`（`sym_num` 绕过 VIO/PS mux，
@@ -472,38 +462,40 @@ python tx_start.py --single 0                 # 重开播（tx_init() 脉冲 0x7
    脉冲读表）。
 2. **窗口只有一拍宽、一圈才来一次**：`cnt_1024 == time_sel` 只成立一个 clk。写晚了
    （时基已经走过这个值）就要等下一圈 —— 最多白等 1024 个符号（450k 档 2.276 ms）。
-   `tx_init()` 走的是"复位期间写"这条捷径：复位放开时时基从 0 起，那时写什么值都在
-   前面、不用等。case 136 是运行中改、时基已经在跑，所以它接受这份等待（见第 5 点）。
+   `tx_start()` 走的是"复位期间写"这条捷径：复位放开时时基从 0 起，那时写什么值都在
+   前面、不用等。运行中改 `0x718` 没有脚本 —— 这是有意的，见第 5 点。
 3. **`time_sel` 没有配套的模式位**：VIO 侧没有对应的 `vio_tx` 端口，所以 `ps/top.vhd`
    里 `bpsk_time_sel_mux` 在 VIO 模式（上电默认）下恒 0，只有 PS 模式才吃 0x718 的值。
    也正因为走的是手写顶层的 mux，**不需要重新生成 VIO IP，也没动 BD**。
 4. **`0x702` 拉低关门、拉高要等下一圈**：`rd_en` 一低，`tx_en` 立刻清 0（`0x702` 还是停发
    开关）；但再拉高时因为窗口只有一拍宽，要等时基**下一圈转回 `time_sel`** 才重新开门 ——
-   最多白等 1024 个符号（450k 档 2.276 ms）。要立刻重来可以脉冲一次 `0x700` 把时基一起
-   归零，但那会破坏参考时基，连续运行的场合不要这么做（见第 5 点）。
-5. **case 136 就是靠这一对开关做的，全程不复位**：case 136 里直接三笔 `emc_write` ——
-   `0x702` 写 0 → 写 `0x718` → `0x702` 写 1。`count` 和 `cnt_1024` 都**不受 `rd_en`
-   影响**，停发期间照常走，所以参考时基不会被破坏 —— 这正是这里不能脉冲 `0x700` 的
-   原因：那一下会把时基归零，校准也就没有意义了。代价就是第 4 点那份等待，改完最多
-   等一圈才恢复发数。
-   **单次发也适用**：`rptr` / `sym_cnt` / `done` 都是 `if(!rst_n || ~rd_en)` 清的，所以
-   跑完 `done` 锁住之后，这一对开关同样能把它重新发起来（`done` 被 `~rd_en` 清掉、
-   `rptr` 归 0），不必脉冲 `0x700`。
+   最多白等 1024 个符号（450k 档 2.276 ms）。这条路径**不重写 `0x718`**，所以起点还是
+   上一次 `tx_start.py` 写进去的那个，停发/恢复不会把它挪走。
+5. **要换起点只能重跑 `tx_start.py`**：`0x718` 在 `tx_start()` 的复位窗口里写（第 4 步），
+   和 `sym_num` / `single_shot` 一样是**开播参数**。早先那条"停发 → 写 `0x718` → 重发、
+   全程不复位"的运行时路径（原来那条独立的起始时基命令，现已删除）已经去掉：它不脉冲
+   `0x700`，靠 `count` / `cnt_1024` 不受 `rd_en` 影响来保住参考时基，代价是每次改完都要
+   等时基转回来。现在统一走复位窗口 —— 起点靠复位的确定性给出（`cnt_1024` 被 hold 在 0，
+   写什么值都在前面、不用等），代价是参考时基也一起归零，`time_sel` 变成"相对本次突发
+   开头"的位置。
+   **单次发也适用**：`rptr` / `sym_cnt` / `done` 都是 `if(!rst_n || ~rd_en)` 清的，所以把
+   `0x702` 拉低再拉高就能从第 0 个符号重新发一遍，不必脉冲 `0x700` —— 但那一下**不会读新的
+   `time_sel`**，起点保持不变。
 
-`tx_init()` 里写的是 `set_bpsk_time_sel(0)` —— **写死 0**，不是 `tx_bpsk_time_sel` 那个
-全局量。所以 case 136 设的校准值只在"不重跑 case 135"的前提下有效：一旦重新开播
-（`tx_start.py` 那条路），`tx_init()` 会把它按 0 写回去。0 = 复位放开后第一拍就开门，
-等于尽快开始 —— 和改动前的默认行为对得上。
+`tx_start()` 里写的是 `set_bpsk_time_sel(tx_bpsk_time_sel)` —— **就是这个全局量**（早先写死
+0，现在按包里的值走）。所以每条 case 135 都按自己带的 `--tsel` 起播，`--tsel 500` 重发多少遍
+都是 500；不写就是 0，复位放开后第一拍就开门，等于尽快开始 —— 和改动前的默认行为对得上。
 
 > **启动比改动前晚一个符号**：读门要花一个脉冲"开门"，而且符号分频器现在跟 `rst_n`
 > （= `TX_REG_RESET`）跑、不再跟 `RAM_EN` 跑，所以从"写 `0x702` = 1"到第一个符号出去，
 > 比改动前晚一个符号左右（450k 档 4.4 µs 上下），具体相位取决于 `RESET` 和 `RAM_EN`
 > 两次写的间隔。稳态周期（400 / 450 clk）、"循环发一直发"、单次发的符号数都不受影响。
-> 默认包（`--tsel` 不写 = 0）走的就是这一格，`tx_init()` 的顺序保证 `0x702` 是在复位放开
-> 后 400 clk 之内拉高的，所以第一拍就撞上窗口，不会白等一圈。**不要在 `0x700` 写 1 和
-> `0x702` 写 1 之间插别的事情**（printf、延时、等别的任务）：`time_sel` = 0 的窗口是复位
-> 放开后的前 400 clk（≈2.2 µs），错过了这一格就要等整整一圈（409600 clk ≈ 2.28 ms）——
-> 不会丢，只是白白晚这么久。`tx_init()` 里这两笔之间只有两个 `emc_write`，是安全的。
+> **`--tsel` = 0 是最紧的一格**：窗口是复位放开后的前 400 clk（≈2.2 µs），`tx_start()` 的顺序
+> 保证 `0x702` 是在复位放开后 400 clk 之内拉高的，所以第一拍就撞上窗口，不会白等一圈。
+> **不要在 `0x700` 写 1 和 `0x702` 写 1 之间插别的事情**（printf、延时、等别的任务）：错过了
+> 这一格就要等整整一圈（409600 clk ≈ 2.28 ms）—— 不会丢，只是白白晚这么久。`tx_start()` 里
+> 这两笔之间只有两个 `emc_write`，是安全的。`--tsel` 越大余量越大：门要到第 `time_sel` 个
+> 时基脉冲才开（450k 档 `time_sel` × 400 clk），500 就是约 1.1 ms 的余量，插什么都不碍事。
 
 发完之后链路上没有残留载波：`bpsk_mapper` 在 `bit_valid` 为低时把 `pulse` 清 0，
 `zero_interpolator` 没样本时输出 0，所以最后一级抗镜像滤波器的冲击响应衰减完（几个

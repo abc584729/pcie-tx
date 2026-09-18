@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-send_symbol_table.py
+tx_ram_configure.py
 Upload a symbol table to a node's TX symbol RAM over UDP, packed
 according to case 134 of the //20260902 edit in adhocSoft.c.
 
@@ -14,10 +14,10 @@ transmitter are all decoupled, and this is the order they have to happen in:
        last one lands, so a partial upload never reaches the PL.  There
        is nothing to transmit from yet, and the transmitter is still
        held off.
-    3. tx_start.py sends case 135, which runs tx_init(): it resets the
+    3. tx_start.py sends case 135, which runs tx_start(): it resets the
        read pointer to 0, applies the DDS frequencies / attenuations /
        enables / rate, the burst length and mode, and the start position
-       from tx_time_calibration.py, then switches the RAM read enable on.
+       in the timebase, then switches the RAM read enable on.
        That is the moment playback starts.
 
 Both the write pointer and the read pointer are at 0 when transmission
@@ -77,9 +77,9 @@ tell them apart on the wire.
 Examples (this is the order they run in):
     python gen_symbol_table.py -o symbols.bin --table-sel bpsk
     python tx_configure.py --bpsk-freq 100 --qpsk-freq 200
-    python send_symbol_table.py --table symbols.bin --table-sel bpsk --dry-run
-    python send_symbol_table.py --table symbols.bin --table-sel bpsk
-    python send_symbol_table.py --table symbols.bin --table-sel qpsk
+    python tx_ram_configure.py --table symbols.bin --table-sel bpsk --dry-run
+    python tx_ram_configure.py --table symbols.bin --table-sel bpsk
+    python tx_ram_configure.py --table symbols.bin --table-sel qpsk
     python tx_start.py --single 0
 """
 

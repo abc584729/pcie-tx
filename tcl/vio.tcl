@@ -44,7 +44,7 @@
 # signal between this VIO and the PS on probe_out7 (tx_sel_vio_ps):
 #
 #   "ps"  -> tx_sel_vio_ps = 1: the PS owns tx_rstn/ram_en/freq/atten/enable.
-#            This is what tx_start.py (case 135, on top of case 133/134/136)
+#            This is what tx_start.py (case 135, on top of case 133/134)
 #            needs, and the only setting under which an uploaded symbol table
 #            is transmitted.
 #            probe_out0..6/10/11 below become inert.
@@ -189,8 +189,8 @@ proc vio_tx_setup {} {
         puts "tx_sel_vio_ps = 1: the PS owns the transmit chain."
         puts "The probe_out0..6/10/11 values above are inert in this mode."
         puts "Next: python tx_configure.py --bpsk-freq 100 --qpsk-freq 200"
-        puts "      python send_symbol_table.py --table <file> --table-sel bpsk"
-        puts "      python tx_start.py --single 0   (starts transmission; tx_init()"
+        puts "      python tx_ram_configure.py --table <file> --table-sel bpsk"
+        puts "      python tx_start.py --single 0   (starts transmission; tx_start()"
         puts "      runs on the board)"
     }
 }

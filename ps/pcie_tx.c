@@ -9,8 +9,8 @@
 #include "AdhocSoft.h"
 #include <math.h>
 
-/* config state owned by adhocSoft.c //20260902: 频点/衰减/使能/速率是 case 133，
- * 单次发/符号数是 case 135（tx_start.py），起始时基是 case 136（tx_time_calibration.py） */
+/* config state owned by adhocSoft.c //20260902: 频点/衰减/使能/速率是 case 133（tx_configure.py），
+ * 单次发/符号数/起始时基是 case 135（tx_start.py） */
 extern double fre_bpsk, fre_qpsk, atten_bpsk, atten_qpsk;
 extern u8     ctrl_bpsk, ctrl_qpsk;
 extern u8     tx_rate_sel;
@@ -19,7 +19,7 @@ extern u32    tx_bpsk_sym_num;       /* bpsk 单次发符号数，0 = 不发。case 135 给
                                      * 大小(kB)，adhocSoft.c 按每符号 1 bit 换算成 bit 数 */
 extern u16    tx_bpsk_time_sel;      /* bpsk 起始时基：0..1023，1024 个符号一圈，时基走到该值才开读门
                                      * （0 = 尽快开始）；实际第一个符号落在时基位置 time_sel + 1。
-                                     * case 136 存进来，tx_init() 写下去 */
+                                     * case 135 存进来，tx_start() 在复位窗口里写下去 */
 
 /*
  * DDS 频点配置公共函数
@@ -138,8 +138,8 @@ void set_qpsk_enable(u8 en)
 
 /*
  * 运行时可改的部分：频点、衰减、速率。
- * tx_init() 和 case 133（tx_configure.py）共用 —— case 133 拿来直接下发，
- * tx_init() 在复位窗口里再写一遍，保证每次都从已知状态起播。
+ * tx_start() 和 case 133（tx_configure.py）共用 —— case 133 拿来直接下发，
+ * tx_start() 在复位窗口里再写一遍，保证每次都从已知状态起播。
  */
 static void tx_apply_runtime_cfg(void)
 {
@@ -205,23 +205,23 @@ void write_qpsk_ram(const u16 *data, unsigned long len)
 }
 
 /* 发射初始化 */
-void tx_init(void)
+void tx_start(void)
 {
-    printf("Tx initializing ... \r\n");
+    printf("Tx starting ... \r\n");
 
-    emc_write(TX_REG_RESET, 0);     /* tx 复位 */
+    // emc_write(TX_REG_RESET, 0);     /* tx 复位 */
     emc_write(TX_REG_RAM_EN, 0);    /* ram 读使能关闭 */
 
     tx_apply_runtime_cfg();
     
     set_bpsk_burst(tx_bpsk_sym_num, tx_bpsk_single_shot);  
 
-    set_bpsk_time_sel(0);
+    set_bpsk_time_sel(tx_bpsk_time_sel);
 
-    emc_write(TX_REG_RESET, 1);     /* 解除 tx 复位 */
+    // emc_write(TX_REG_RESET, 1);     /* 解除 tx 复位 */
     set_bpsk_enable(ctrl_bpsk);     /* bpsk 使能 */
     set_qpsk_enable(ctrl_qpsk);     /* qpsk 使能 */
     emc_write(TX_REG_RAM_EN, 1);    /* ram 读使能 */
 
-    printf("Tx has been initialized. \r\n");
+    printf("Tx has been started. \r\n");
 }

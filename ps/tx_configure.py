@@ -12,15 +12,15 @@ touch TX_REG_RESET, so the read pointer, symbol counter, `done` and the
 timebase all keep running and whatever is on the air is not interrupted.
 
 What case 133 does NOT do is start or restart a burst. Those parameters live
-in their own commands, because they have to be written inside the tx_init()
+in their own commands, because they have to be written inside the tx_start()
 reset window:
 
-    tx_start.py             (case 135)  burst length + mode, then tx_init()
-    tx_time_calibration.py  (case 136)  BPSK start position in the timebase
+    tx_start.py             (case 135)  burst length + mode + start position
+                                        in the timebase, then tx_start()
 
-So the order is: tx_configure.py -> send_symbol_table.py -> tx_start.py.
+So the order is: tx_configure.py -> tx_ram_configure.py -> tx_start.py.
 Run tx_configure.py again at any time to retune -- it takes effect immediately.
-tx_init() re-applies the same values at the next tx_start.py, so a start always
+tx_start() re-applies the same values at the next tx_start.py, so a start always
 comes up from a known state.
 
 case 133 payload layout (UDP payload == raw pBuf; the Ethernet control
@@ -41,11 +41,10 @@ socket has no frame header and no CRC):
     Total length = 36 bytes.
 
     The packet used to run to 47 bytes (bpsk_single_shot, bpsk_size_kb,
-    bpsk_time_sel). Those three fields moved to their own command words --
-    see tx_start.py (135) and tx_time_calibration.py (136). case 133 still
-    ignores anything past byte 35, so old 45/47-byte packets do no harm,
-    except that their burst/time_sel fields are now silently ignored: send
-    a tx_start.py / tx_time_calibration.py packet instead.
+    bpsk_time_sel). Those three fields moved to their own command word --
+    see tx_start.py (135). case 133 still ignores anything past byte 35, so
+    old 45/47-byte packets do no harm, except that their burst/time_sel
+    fields are now silently ignored: send a tx_start.py packet instead.
 
     rate_sel changes both the symbol rate and the truncation in the adders,
     so after switching it you have to re-upload the symbol table (case 134).
@@ -75,9 +74,9 @@ OFF_FRE_QPSK = 19
 OFF_ATTEN_QPSK = 27
 OFF_RATE_SEL = 35
 
-PKT_LEN = 36            # ends at rate_sel; burst/time_sel moved to case 135/136
+PKT_LEN = 36            # ends at rate_sel; burst/time_sel moved to case 135
 
-# Match pcie_tx.c tx_init() defaults, so running bare = restore default init
+# Match pcie_tx.c tx_start() defaults, so running bare = restore default init
 DEF_CTRL = 1
 DEF_FRE_BPSK = 100.0   # MHz
 DEF_FRE_QPSK = 200.0   # MHz

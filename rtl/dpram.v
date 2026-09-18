@@ -16,7 +16,7 @@
 //   uses 32768 x 16 = 512 Kbit (64 KB).
 //   The contents are written entirely through the write port; there is no
 //   preload, so the PS must fill the whole table before the reader is
-//   enabled (tx_init() does this with TX_REG_RAM_EN held at 0).
+//   enabled (tx_start() does this with TX_REG_RAM_EN held at 0).
 //   Read port is bit-addressable, LSB-first:
 //   r_addr = word*(16/READ_WIDTH) + group index.
 //   Reading and writing the same address on the same clock returns the

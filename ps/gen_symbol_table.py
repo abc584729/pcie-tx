@@ -10,10 +10,10 @@ independent uniform 16-bit value.  The size is arbitrary -- pick it with
 
 Nothing here knows about modulation. The file is just a run of numbers;
 what the numbers mean once they are in the RAM is the RTL's business, and
-which table they end up in is decided by send_symbol_table.py.
+which table they end up in is decided by tx_ram_configure.py.
 
 A file shorter than the table it is sent to is zero-padded by
-send_symbol_table.py, so a short file leaves the tail of the transmission
+tx_ram_configure.py, so a short file leaves the tail of the transmission
 at the zero word (all-zero symbols).  Nothing longer than a full table can
 ever be sent, so the size is capped at 512 KB -- ask for more and this
 exits with an error instead of writing a file with nowhere to go.
@@ -37,7 +37,7 @@ import os
 import random
 import sys
 
-# Must match send_symbol_table.py and adhocSoft.c
+# Must match tx_ram_configure.py and adhocSoft.c
 RAM_TABLE_WORDS = {'bpsk': 262144, 'qpsk': 32768}
 # Largest table the transmitter can hold (BPSK: 262144 words = 524288 bytes =
 # 512 KB).  Hard cap -- a longer file could never be sent, so generating one is
@@ -98,7 +98,7 @@ def main():
     args = ap.parse_args()
 
     if os.path.splitext(args.out)[1].lower() != '.bin':
-        raise SystemExit('output must be a .bin file: send_symbol_table.py '
+        raise SystemExit('output must be a .bin file: tx_ram_configure.py '
                          'reads .bin only')
 
     if args.table_sel:
@@ -114,7 +114,7 @@ def main():
         source = '--bytes %d' % args.bytes
 
     # Checked before anything is allocated or written: refuse rather than
-    # produce a file that send_symbol_table.py would only reject.
+    # produce a file that tx_ram_configure.py would only reject.
     if n_words > MAX_TABLE_WORDS:
         ap.error('size too large: %d words = %d bytes, but the largest TX table '
                  'is %d words = %d bytes (512 KB) and nothing longer can be sent'
@@ -139,7 +139,7 @@ def main():
     print('seed    : 0x%08X   (pass --seed 0x%08X to reproduce)' % (seed, seed))
     print('first 8 : ' + ' '.join('0x%04X' % w for w in words[:8]))
     if n_words < MAX_TABLE_WORDS:
-        print('note    : shorter than a full table -- send_symbol_table.py will '
+        print('note    : shorter than a full table -- tx_ram_configure.py will '
               'zero-pad the rest')
 
 

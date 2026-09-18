@@ -5,12 +5,12 @@ Send the UDP "start transmission" command packet to a node, packed according
 to case 135 of the //20260902 edit in adhocSoft.c.
 
 This is the *start* half of the old send_tx_init.py: it carries the BPSK burst
-parameters (single shot / cyclic, and how many symbols to send) and then calls
-tx_init() on the board, which pushes the whole configuration to hardware and
-starts transmitting.
+parameters (single shot / cyclic, how many symbols to send, and where in the
+timebase to start) and then calls tx_start() on the board, which pushes the
+whole configuration to hardware and starts transmitting.
 
 Run it after tx_configure.py (frequency / attenuation / enable / rate) and
-after send_symbol_table.py (the symbol RAM). Both of those keep their values;
+after tx_ram_configure.py (the symbol RAM). Both of those keep their values;
 this script is what actually makes RF come out.
 
 case 135 payload layout (UDP payload == raw pBuf; the Ethernet control
@@ -24,8 +24,9 @@ socket has no frame header and no CRC):
                                        size of the symbol-table data file, in
                                        kB (1024-based, like the K/M/G suffixes
                                        of gen_symbol_table.py)
+    10..11   bpsk_time_sel              u16 (2B, little-endian) 0..1023
 
-    Total length = 10 bytes.
+    Total length = 12 bytes.
 
     bpsk_size_kb is the size of the .bin that was uploaded with case 134, so
     "send exactly what I just uploaded" needs no arithmetic on the host side.
@@ -48,13 +49,26 @@ socket has no frame header and no CRC):
     The ARM (Zynq) is little-endian and the C side copies the double with
     memcpy(&double, &pBuf[off], 8), so the double is packed with '<d'.
 
-    This script does NOT carry bpsk_time_sel any more -- that is its own
-    command word now, see tx_time_calibration.py (case 136). That command
-    applies the value live without a reset, and tx_init() writes the same
-    global here, so a start also comes up at the calibrated position and
-    does not wipe it.
+    bpsk_time_sel is where in the 1024-symbol timebase the BPSK read gate
+    opens, which is how you place the start of a burst at a known, repeatable
+    position on a scope. The timebase is 1024 symbols long (450k: 400*1024 clk
+    = 2.276 ms; 400k: 450*1024 = 2.56 ms) and is driven by the same divider
+    pulse that reads the table, so the pulse that matches bpsk_time_sel is
+    spent opening the gate and reads nothing: the first symbol actually
+    transmitted sits at timebase position bpsk_time_sel + 1. 0 = open it on
+    the very first pulse after reset (= start as soon as possible). Only the
+    PS path uses it -- in VIO mode the top level ties it to 0.
 
-    Running this again re-triggers the burst: tx_init() pulses TX_REG_RESET,
+    It is written inside the tx_start() reset window (reset is pulsed at step
+    5, the register is written at step 4), so the timebase counter is held at
+    0 while it lands and the value is always ahead of the counter: no waiting
+    for the next lap, and the burst comes up at the calibrated position
+    without any extra command. The cost of the same reset is that the
+    reference timebase itself restarts, so time_sel is only meaningful
+    relative to the start of *this* burst -- the old live 0x702=0 -> 0x718 ->
+    0x702=1 trick that changed it mid-flight without resetting is gone.
+
+    Running this again re-triggers the burst: tx_start() pulses TX_REG_RESET,
     which is what clears the read pointer, the symbol counter, `done` and the
     timebase counter -- a finished single-shot burst cannot restart without it.
 
@@ -66,7 +80,9 @@ Examples:
     python tx_start.py --single 1 --size 256        # the 256 kB file just uploaded
     python tx_start.py --single 1 --size full       # whole 512 kB table
     python tx_start.py --single 1 --size 1.953125   # a 2000-byte file
-    python tx_start.py --single 0                   # cyclic, --size ignored
+    python tx_start.py --single 0                   # cyclic, whole table per turn
+    python tx_start.py --tsel 500                   # open the gate at count 500
+    python tx_start.py --single 1 --size 256 --tsel 500
     python tx_start.py --single 0 --dry-run
 """
 
@@ -78,8 +94,12 @@ CMD_TX_START = 135
 
 OFF_SINGLE_SHOT = 1
 OFF_SIZE_KB = 2
+OFF_TIME_SEL = 10
 
-PKT_LEN = 10            # cmd + single_shot + size_kb
+PKT_LEN = 12            # cmd + single_shot + size_kb + time_sel
+
+# time_sel is 10 bit: 1024 symbols per timebase frame
+TIME_SEL_MAX = 1023
 
 # The symbol table is 262144 x 16 bit = 512 kB of file = 2^22 bit = 2^22 symbols
 TABLE_KB = 512.0        # one full pass over the BPSK table
@@ -88,6 +108,7 @@ SIZE_KB_MAX = ((1 << 23) - 1) / float(BITS_PER_KB)   # 23-bit counter, ~1024 kB
 
 DEF_SINGLE = 1         # 1 = single shot (this command exists to fire a burst)
 DEF_SIZE_KB = 0.0      # 0 = send nothing in single-shot mode
+DEF_TIME_SEL = 0       # 0 = open the read gate on the first pulse (start ASAP)
 
 
 def parse_size_kb(text):
@@ -112,12 +133,13 @@ def parse_size_kb(text):
     return kb
 
 
-def build_packet(single_shot, size_kb):
-    """Pack the payload per the case 135 layout; return bytes(10)."""
+def build_packet(single_shot, size_kb, time_sel):
+    """Pack the payload per the case 135 layout; return bytes(12)."""
     buf = bytearray(PKT_LEN)
     buf[0] = CMD_TX_START
     buf[OFF_SINGLE_SHOT] = int(single_shot) & 0x1
     struct.pack_into('<d', buf, OFF_SIZE_KB, float(size_kb))
+    struct.pack_into('<H', buf, OFF_TIME_SEL, int(time_sel) & 0x3FF)
     return bytes(buf)
 
 
@@ -134,7 +156,7 @@ def hex_dump(data):
 def main():
     ap = argparse.ArgumentParser(
         description='Send the //20260902 case 135 start command: BPSK burst '
-                    'length/mode, then tx_init() on the board.')
+                    'length/mode, then tx_start() on the board.')
     ap.add_argument('--ip', default='192.168.1.10', help='node IP (default 192.168.1.10)')
     ap.add_argument('--port', type=int, default=14147, help='node ctrl port (default 14147)')
     ap.add_argument('--rate', type=int, choices=(0, 1),
@@ -147,14 +169,23 @@ def main():
                     help='size of the uploaded symbol-table file, in kB (1024-based, '
                          'K/M suffix ok) or "full" for the whole %g kB table; '
                          'default %g' % (TABLE_KB, DEF_SIZE_KB))
+    ap.add_argument('--tsel', type=int, default=DEF_TIME_SEL,
+                    help='BPSK start position in the 1024-symbol timebase, 0..%d: the read '
+                         'gate opens when the timebase count reaches it, so the first '
+                         'symbol sent sits at position tsel+1; 0 = start as soon as '
+                         'possible (default %d)' % (TIME_SEL_MAX, DEF_TIME_SEL))
     ap.add_argument('--dry-run', action='store_true', help='build/print packet only, do not send')
     args = ap.parse_args()
 
+    if not 0 <= args.tsel <= TIME_SEL_MAX:
+        raise SystemExit('--tsel %d out of range: 0..%d' % (args.tsel, TIME_SEL_MAX))
+
     size_kb = parse_size_kb(args.size)
-    pkt = build_packet(args.single, size_kb)
+    pkt = build_packet(args.single, size_kb, args.tsel)
 
     # what adhocSoft.c will make of it: BPSK is 1 bit per symbol
     sym_num = int(size_kb * BITS_PER_KB + 0.5)
+    tsel = struct.unpack_from('<H', pkt, OFF_TIME_SEL)[0]
 
     rs = 400e3 if args.rate == 1 else 450e3       # bpsk symbol rate
     rate_label = '400 kHz' if args.rate == 1 else '450 kHz'
@@ -176,9 +207,12 @@ def main():
     print('burst   : single_shot=%d  size=%.6f kB (%d bytes) -> %d bits'
           % (pkt[OFF_SINGLE_SHOT], size_kb, int(round(size_kb * 1024)), sym_num))
     print('          %s' % burst)
-    print('note    : tx_init() runs on the board -- freq / atten / enable / rate '
-          'come from the last tx_configure.py, time_sel from the last '
-          'tx_time_calibration.py.')
+    print('time_sel: %d  (first symbol at position %d)' % (tsel, tsel + 1))
+    if tsel:
+        print('          gate opens on the lap pulse that reaches %d, no waiting: the '
+              'value lands while reset holds the timebase at 0' % tsel)
+    print('note    : tx_start() runs on the board -- freq / atten / enable / rate '
+          'come from the last tx_configure.py.')
     print(hex_dump(pkt))
 
     if args.dry_run:
