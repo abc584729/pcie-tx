@@ -40,9 +40,12 @@ An old bitstream that predates this decodes nothing at 0x71A and returns the
 unknown-address fallback 0xAA55, which is how you tell "no such register" from
 "busy = 0".
 
-One emc_read is a PL round-trip (the ARM polls EMC_READ_FLAG_ADDR for it), so
-do not poll faster than a few hundred ms -- --interval defaults to 0.2 s for
-that reason.
+emc_read is a plain MMIO read -- Xil_In32/In16(EMC_BASEADDR1 + addr) in
+emc_function.c. There is no PL round-trip and no flag to poll. The cost is on
+the UDP side instead: the board's recv_thread does one blocking lwip_read per
+loop pass, so every sample is a whole request/reply cycle against that loop.
+--interval defaults to 0.2 s to stay courteous to it, not because the read is
+slow.
 
 Target: node control port UDP 192.168.1.10:14147 (the adhocCtrl listening
 port, see adhocSoft.c).
@@ -76,7 +79,7 @@ UNKNOWN_ADDR_FALLBACK = 0xAA55   # what an undecoded address reads back as
 
 DEF_ADDR = ADDR_TX_BPSK_BUSY
 DEF_BIT = 0
-DEF_INTERVAL = 0.2      # seconds between samples -- one EMC round-trip each
+DEF_INTERVAL = 0.2      # seconds between samples -- one UDP round-trip each
 DEF_TIMEOUT = 1.0       # seconds to wait for a reply
 
 
@@ -141,8 +144,9 @@ def main():
                     help='with --watch: how many samples to take, 0 = until '
                          'Ctrl-C (default 0)')
     ap.add_argument('--interval', type=float, default=DEF_INTERVAL,
-                    help='seconds between samples (default %g); one emc_read is a '
-                         'PL round-trip, so do not go much below this' % DEF_INTERVAL)
+                    help='seconds between samples (default %g); each sample is a '
+                         'full UDP round-trip with the board, so do not go much '
+                         'below this' % DEF_INTERVAL)
     ap.add_argument('--timeout', type=float, default=DEF_TIMEOUT,
                     help='seconds to wait for each reply (default %g)' % DEF_TIMEOUT)
     ap.add_argument('--dry-run', action='store_true', help='build/print packet only, do not send')

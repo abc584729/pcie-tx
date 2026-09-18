@@ -720,8 +720,10 @@ python tx_status.py --addr 0x702           # 任意地址
 
 注意：
 
-- 一次 `emc_read` 是一笔 PL 往返事务（`recv_thread` 轮 `EMC_READ_FLAG_ADDR`），所以默认
-  `--interval 0.2` 秒一次，**别在板上紧循环里猛刷**。
+- `emc_read` 就是一次普通 MMIO 读（`emc_function.c` 里的 `Xil_In32/In16(EMC_BASEADDR1 +
+  addr)`），**不是 PL 往返、也没有标志位要轮**。开销在 UDP 那一侧：板上 `recv_thread`
+  每轮循环只做一次阻塞 `lwip_read`，所以每个采样点都是一整个请求/应答周期。默认
+  `--interval 0.2` 秒是为了不刷爆那个循环，不是读本身慢。
 - **旧 bitstream 读 `0x71A` 返回 `0xAA55`**（未译码地址的兜底值），脚本会把它标出来 ——
   正好用来区分"没这个功能"和"busy = 0"。
 - `case 137` 是通用的（任意地址），以后加 qpsk busy / done 直接在 `0x71A` 高位放就行，不用
