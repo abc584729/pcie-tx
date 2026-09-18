@@ -22,6 +22,10 @@
 #define TX_REG_BPSK_SYM_NUM_H   (0x714)    /* bpsk 单次发符号数高 7 位（仅 bit6:0 有效，整表 4194304 个符号） */
 #define TX_REG_BPSK_SINGLE_SHOT (0x716)    /* bpsk 发射模式：bit0 = 0 循环发（默认），1 单次发满符号数就停 */
 #define TX_REG_BPSK_TIME_SEL    (0x718)    /* bpsk 起始时基：0..1023，1024 个符号一圈，时基计数走到该值时打开读门 */
+#define TX_REG_BPSK_BUSY        (0x71A)    /* bpsk 发射状态（只读）：bit0 = 1 正在发射，0 空闲。
+                                            * 判据是"0x702 有效且这一轮没发完"：单次发发完
+                                            * （done 锁住）或 0x702 拉低后落 0。注意它不等于
+                                            * "真的有波出"——0x702 拉高后等时基窗口的那段它已经是 1 */
 
 /* DDS 中频配置寄存器 */
 #define DDS_REG_RESET           (0x800)    /* dds 复位：0 复位，1 解除复位 */
@@ -87,6 +91,14 @@ void set_bpsk_burst(unsigned long sym_num, unsigned char single_shot);
  *        所以 tx_start()（case 135）在复位窗口里写它。
  */
 void set_bpsk_time_sel(unsigned short tsel);
+
+/*
+ * 读 bpsk 发射状态（寄存器 0x71A bit0，只读）
+ * 返回 1 = 正在发射，0 = 空闲（"单次发已经发完"和"0x702 关着"都算空闲）。
+ * 只有 bit0 有意义，其余位读回 0。
+ * 注意这是一次 PL 侧的 EMC 读事务（不是内存访问），别在紧循环里猛刷。
+ */
+unsigned short tx_get_bpsk_busy(void);
 
 /* ================= RAM 符号表写函数 ================= */
 

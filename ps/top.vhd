@@ -415,6 +415,8 @@ signal		iq :   STD_LOGIC_VECTOR(255 downto 0);
 -- bpsk/qpsk 并行链数据有效（8 路复乘 valid 相或），供顶层观察/使用
 signal		bpsk_sig_valid :   STD_LOGIC;   
 signal		qpsk_sig_valid :   STD_LOGIC;   
+-- BPSK 发射状态（送给 ps_interface_1 的 EMC 读译码器，地址 0x71A bit0）
+signal		bpsk_tx_busy :   STD_LOGIC;   
 -- 送 DAC 的 axis tvalid：两条链的数据有效相或（各自被 bpsk_en/qpsk_en 门控）
 signal		dac_sig_valid :   STD_LOGIC;   
 COMPONENT tx_top
@@ -443,7 +445,8 @@ COMPONENT tx_top
     bpsk_time_sel   : in STD_LOGIC_VECTOR(9 DOWNTO 0);
     iq: OUT STD_LOGIC_VECTOR(255 DOWNTO 0);
     bpsk_sig_valid: OUT STD_LOGIC;
-    qpsk_sig_valid: OUT STD_LOGIC
+    qpsk_sig_valid: OUT STD_LOGIC;
+    bpsk_tx_busy  : OUT STD_LOGIC
   );
  
 END COMPONENT;
@@ -1349,7 +1352,8 @@ component ps_interface_1 is
         ram_w_data_qpsk_ps  : out STD_LOGIC_VECTOR(15 downto 0);
         bpsk_sym_num_ps     : out STD_LOGIC_VECTOR(22 downto 0);
         bpsk_single_shot_ps : out STD_LOGIC;
-        bpsk_time_sel_ps    : out STD_LOGIC_VECTOR(9 downto 0)
+        bpsk_time_sel_ps    : out STD_LOGIC_VECTOR(9 downto 0);
+        bpsk_tx_busy        : in  STD_LOGIC
   );
 end component;
 
@@ -3930,7 +3934,8 @@ Port map (
         ram_w_data_qpsk_ps  => ram_w_data_qpsk_ps,
         bpsk_sym_num_ps     => bpsk_sym_num_ps,
         bpsk_single_shot_ps => bpsk_single_shot_ps,
-        bpsk_time_sel_ps    => bpsk_time_sel_ps
+        bpsk_time_sel_ps    => bpsk_time_sel_ps,
+        bpsk_tx_busy        => bpsk_tx_busy
 );
 
 ---------------灯开关---------------------
@@ -4831,7 +4836,8 @@ bpsk_time_sel_mux    <= (others => '0') when tx_sel_vio_ps(0) = '0' else bpsk_ti
     bpsk_time_sel      => bpsk_time_sel_mux,
     iq            => iq,
     bpsk_sig_valid => bpsk_sig_valid,
-    qpsk_sig_valid => qpsk_sig_valid
+    qpsk_sig_valid => qpsk_sig_valid,
+    bpsk_tx_busy   => bpsk_tx_busy
   );
  
  u_ila_tx : ila_tx

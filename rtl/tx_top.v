@@ -42,7 +42,8 @@ module tx_top(
         input [15:0] ram_w_data_qpsk,
         output [255:0] iq,
         output bpsk_sig_valid,       // BPSK parallel-chain data valid (8 cmpy valids OR'ed)
-        output qpsk_sig_valid        // QPSK parallel-chain data valid (8 cmpy valids OR'ed)
+        output qpsk_sig_valid,       // QPSK parallel-chain data valid (8 cmpy valids OR'ed)
+        output bpsk_tx_busy          // BPSK read gate open and this turn not finished (0x71A bit0)
     );
 
     wire [127:0] i_0, q_0;
@@ -64,7 +65,8 @@ module tx_top(
         .time_sel      (bpsk_time_sel),
         .sig_i         (i_0),
         .sig_q         (q_0),
-        .sig_valid     (bpsk_sig_valid)
+        .sig_valid     (bpsk_sig_valid),
+        .tx_busy       (bpsk_tx_busy)
     );
 
     wire [127:0] i_1, q_1;

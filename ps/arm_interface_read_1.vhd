@@ -117,7 +117,9 @@ entity arm_interface_read_1 is
          ------精时间同步校正次数被读走标志 ------
          flag_times_timestamp_cor_read: out std_logic;
          fft_data            : in std_logic_vector(15 downto 0);
-         flag_fft_bram_addrb : out std_logic
+         flag_fft_bram_addrb : out std_logic;
+         ----    BPSK 发射状态  ----
+         bpsk_tx_busy        : in  std_logic
           
    
 		   );
@@ -195,6 +197,8 @@ constant ADDR_times_timestamp_cor       : std_logic_vector(11 downto 0) := x"1B8
 
 constant ADDR_fft_data_rd_complete      : std_logic_vector(11 downto 0) := x"170";
 constant ADDR_fft_data                  : std_logic_vector(11 downto 0) := x"176";
+----    BPSK 发射状态(只读)  ----
+constant ADDR_TX_BPSK_BUSY : std_logic_vector(11 downto 0) := x"71A";
 
 COMPONENT ila_ps_read_128M
 
@@ -256,6 +260,7 @@ signal MEASURED_TEMP_K7_internal1                   : std_logic_vector(11 downto
 --signal clk_lock_state_internal1                     : std_logic_vector(7 downto 0);
 signal Version_K7_internal1                         : std_logic_vector(2 downto 0);
 signal DONE_CONFIG_FPGA2_internal1                  : std_logic;
+signal bpsk_tx_busy_internal1                       : std_logic;
 
 signal send_timestamp_2_internal1                   : std_logic_vector(15 downto 0);
 signal send_timestamp_1_internal1                   : std_logic_vector(15 downto 0);
@@ -296,6 +301,7 @@ signal MEASURED_TEMP_K7_internal2                   : std_logic_vector(11 downto
 --signal clk_lock_state_internal2                     : std_logic_vector(7 downto 0);
 signal Version_K7_internal2                         : std_logic_vector(2 downto 0);
 signal DONE_CONFIG_FPGA2_internal2                  : std_logic;
+signal bpsk_tx_busy_internal2                       : std_logic;
 
 signal send_timestamp_2_internal2                   : std_logic_vector(15 downto 0);
 signal send_timestamp_1_internal2                   : std_logic_vector(15 downto 0);
@@ -381,6 +387,7 @@ begin
 --		clk_lock_state_internal1                <= (others => '0');
 		Version_K7_internal1                    <= (others => '0');
 		DONE_CONFIG_FPGA2_internal1             <= '0';
+		bpsk_tx_busy_internal1                  <= '0';
 		falg_rx_resp_internal1                  <= '0';
 		rx_resp_data_internal1                  <= (others => '0');
 		times_timestamp_cor1                    <=  (others => '0');
@@ -427,6 +434,7 @@ begin
 		times_timestamp_cor1                    <= times_timestamp_cor;
 		state_timeslot_adj1                     <= state_timeslot_adj;
 		fft_data1                               <= fft_data;
+		bpsk_tx_busy_internal1                  <= bpsk_tx_busy;
        
 	end if;
 end process;
@@ -467,6 +475,7 @@ begin
 --		clk_lock_state_internal2                <= (others => '0');
 		Version_K7_internal2                    <= (others => '0');
 		DONE_CONFIG_FPGA2_internal2             <= '0';
+		bpsk_tx_busy_internal2                  <= '0';
 		falg_rx_resp_internal2                  <= '0';
 		rx_resp_data_internal2                  <= (others => '0');
 		times_timestamp_cor2 <=  (others => '0');
@@ -512,6 +521,7 @@ begin
 		times_timestamp_cor2 <=  times_timestamp_cor1;
         state_timeslot_adj2                     <= state_timeslot_adj1;
 		fft_data2                               <= fft_data1;
+		bpsk_tx_busy_internal2                  <= bpsk_tx_busy_internal1;
 		
 	end if;
 end process;
@@ -633,6 +643,10 @@ begin
 			        ps_din_128M <= times_timestamp_cor2;
 			elsif ps_addr = ADDR_fft_data then
 			        ps_din_128M <= fft_data2;
+			----    BPSK 发射状态(0x71A, 只读, bit0)  ----
+			elsif ps_addr = ADDR_TX_BPSK_BUSY then
+					ps_din_128M(0) <= bpsk_tx_busy_internal2;
+					ps_din_128M(15 downto 1) <= (others => '0');
 			else
 					ps_din_128M <= x"AA55";
 			end if;

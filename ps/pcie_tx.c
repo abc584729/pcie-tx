@@ -184,6 +184,17 @@ void set_bpsk_time_sel(u16 tsel)
     printf("bpsk time sel : %u \r\n", (unsigned)(tsel & 0x3FF));
 }
 
+/*
+ * bpsk 发射状态（只读，0x71A bit0）：1 = 正在发射，0 = 空闲。
+ * 单次发发完（done 锁住）或 0x702 拉低之后落 0；0x702 拉高、但还在等时基
+ * 窗口的那段（最长 1024 个符号）它已经是 1 了 —— 它回答的是"读门开着且这
+ * 一轮没发完"，不是"此刻真的有波出"。
+ */
+unsigned short tx_get_bpsk_busy(void)
+{
+    return (unsigned short)(emc_read(TX_REG_BPSK_BUSY) & 0x1);
+}
+
 void write_bpsk_ram(const u16 *data, unsigned long len)
 {
     unsigned long i;

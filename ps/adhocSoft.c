@@ -370,6 +370,40 @@ void main_thread(void)
 }
 
 
+
+//20260918 edit
+/*
+ * 控制口回包（给发命令的那台机器回一个 UDP 包）。
+ * 原来 adhocCtrl 收包用的是 lwip_read —— 它等于 lwip_recvfrom(..., NULL, NULL)，
+ * 发送方地址直接丢掉，所以 ProcCmd 里没法回包。现在换成 lwip_recvfrom 把来源接住，
+ * 这三样提到文件作用域，ProcCmd 才够得着。
+ */
+#ifdef CONSOLE_CONNECT_MODE_ETHERNET
+static int adhocCtrlSfd = -1;
+static struct sockaddr_in adhocCtrlPeer;
+static socklen_t adhocCtrlPeerLen = 0;
+
+void ReplyToCmdSender(unsigned char *pMsg, unsigned short len)
+{
+	int ret;
+
+	if (adhocCtrlSfd < 0 || adhocCtrlPeerLen == 0)
+	{
+		xil_printf("no ctrl peer to reply to.\r\n");
+		return;
+	}
+	ret = lwip_sendto(adhocCtrlSfd, (void *)pMsg, len, 0,
+	                  (struct sockaddr *)&adhocCtrlPeer, adhocCtrlPeerLen);
+	if (ret < 0)
+		xil_printf("error writing sock adhocCtrlSfd %d %s.\r\n", errno, strerror(errno));
+}
+#else
+void ReplyToCmdSender(unsigned char *pMsg, unsigned short len)
+{
+	(void)pMsg;
+	(void)len;   /* 只有以太网控制口能回包，UART 配置下是空的 */
+}
+#endif
 void ProcCmd(unsigned char *pBuf, U16 len)
 {
 	int ret, i, Index;
@@ -1570,6 +1604,22 @@ void ProcCmd(unsigned char *pBuf, U16 len)
 			       "timebase still running).\r\n");
 			break;
 //20260902
+		//20260918 edit
+		/* 通用读寄存器并**回包**给发命令的那台机器（case 7 只往串口打，不回包）。
+		 * pBuf[1..2] = 地址（小端）；回包 5 字节：[137, addrL, addrH, valL, valH]。
+		 * tx_status.py 用它轮询 0x71A 的 bit0（bpsk 发射状态）。
+		 * 注意一次 emc_read 是一笔 PL 往返事务，别在板上紧循环里猛刷。 */
+		case 137:
+			read_addr = 256*pBuf[2] + pBuf[1];
+			read_para = emc_read(read_addr);
+			cmdBuff[0] = 137;
+			cmdBuff[1] = (unsigned char)(read_addr & 0xFF);
+			cmdBuff[2] = (unsigned char)((read_addr >> 8) & 0xFF);
+			cmdBuff[3] = (unsigned char)(read_para & 0xFF);
+			cmdBuff[4] = (unsigned char)((read_para >> 8) & 0xFF);
+			ReplyToCmdSender(cmdBuff, 5);
+			xil_printf("[EmcReadReply] addr 0x%x -> %d.\r\n", read_addr, read_para);
+			break;
 		default:
 			printf("debug: type %d wrong", type);
 			break;
@@ -2011,7 +2061,6 @@ void ReportInitState(u16 ID)
 void adhocCtrl(void)
 {
     int ret, i;
-    int adhocCtrlSfd = -1;
     struct sockaddr_in ctrlAddr;
     U16 t_2 = 0;
 	U16 t_1 = 0;
@@ -2056,7 +2105,10 @@ void adhocCtrl(void)
     while(1)
     {
 //        xil_printf("Before lwip_read.\r\n");
-    	cmdLen = lwip_read(adhocCtrlSfd, CMDBuf, 1400);
+	 	/* //20260918: 换成 recvfrom，把发送方地址收下来，后面才能回包 */
+	 	adhocCtrlPeerLen = sizeof(adhocCtrlPeer);
+	 	cmdLen = lwip_recvfrom(adhocCtrlSfd, CMDBuf, 1400, 0,
+	 	                       (struct sockaddr *)&adhocCtrlPeer, &adhocCtrlPeerLen);
         //xil_printf("lwip_read ret is %d.\r\n",ret);
 //        xil_printf("After lwip_read.\r\n");
 

@@ -31,7 +31,8 @@ module bpsk_ram(
     input [22:0] sym_num,      // 一轮要发的符号数 1..8388607；0 见下面 sym_len
     input single_shot,         // 0 = 循环发（默认），1 = 发满 sym_num 个就停
     output rdata,             
-    output rdata_valid
+    output rdata_valid,
+    output reg busy            // 1 = 正在发射（rd_en 有效且本轮没发完）
     );
 
     // 符号速率: rate_sel = 0 -> 450 kHz, 1 -> 400 kHz
@@ -90,6 +91,15 @@ module bpsk_ram(
 
     assign stop   = single_shot && (done || (sym_num == 23'd0));
     assign flag_g = flag & ~stop;
+
+    // 发射状态：0x702（rd_en）有效就拉高；stop（单次发 done / sym_num=0）或者 rd_en 拉低就清 0。
+    // 只打一拍、不组合输出，没有毛刺；rd_en 拉低同时也会清掉 rptr / sym_cnt / done，
+    // 所以这个位落下就等于"这一轮结束了"。
+    // 注意它不是"真的有波出"：0x702 拉高之后等时基窗口的那段（最长 1024 个符号）它已经是 1。
+    always @(posedge clk or negedge rst_n) begin
+        if(!rst_n) busy <= 1'b0;
+        else       busy <= rd_en & ~stop;
+    end
 
     // 读指针：就是 dpram 的表地址（低 22 位），数满一轮回到 0。
     // 做成 23 位是为了跟 sym_len 同宽：sym_num 超过表长时高位进位被 r_addr 截掉，

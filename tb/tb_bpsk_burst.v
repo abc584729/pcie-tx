@@ -45,6 +45,7 @@ module tb_bpsk_burst;
 
   wire rdata;
   wire rdata_valid;
+  wire busy;                    // new: 1 while this turn is being transmitted
 
   // write port of the table (only the first few words are needed)
   reg         u_wen = 0;
@@ -63,7 +64,8 @@ module tb_bpsk_burst;
     .sym_num     (sym_num),
     .single_shot (single_shot),
     .rdata       (rdata),
-    .rdata_valid (rdata_valid)
+    .rdata_valid (rdata_valid),
+    .busy        (busy)
   );
 
   always #5 clk = ~clk;
@@ -93,6 +95,7 @@ module tb_bpsk_burst;
   // per-run measurements
   integer v_cnt, p_cnt, t, first_v, last_v, period, rptr_end, rptr_end2;
   integer f_cnt, rptr_err;
+  integer b_arm, b_end;                      // busy, one clk after rd_en rises / at the end
   integer exp_period;
   integer k_v, k_gap, k_period, k_prev;      // case K
   integer exp_len;                           // symbols per turn, for this run
@@ -137,6 +140,7 @@ module tb_bpsk_burst;
 
       for (t = 0; t < cycles; t = t + 1) begin
         @(posedge clk); #1;
+        if (t == 0) b_arm = busy;        // one clk after rd_en rose
         if (rdata_valid) begin
           v_cnt = v_cnt + 1;
           // the k-th valid of a turn carries symbol k-1 and leaves rptr at k,
@@ -152,6 +156,7 @@ module tb_bpsk_burst;
       end
 
       rptr_end = rptr;
+      b_end = busy;                    // sampled at the end of the measurement window
       // rptr must be frozen once the burst is over
       repeat (4 * CLK_PER_SYM_400K) @(posedge clk);
       #1;
@@ -180,6 +185,8 @@ module tb_bpsk_burst;
     check("valids in 4500 clk (2 laps of 5)", v_cnt, 10);
     check("read pulses", p_cnt, 10);
     check("rptr wraps at sym_num-1", rptr_err, 0);
+    check("busy right after rd_en", b_arm, 1);
+    check("busy high at end (cyclic)", b_end, 1);
 
     // ---- B: single shot, 5 symbols ----
     $display("B: single shot, sym_num=5");
@@ -191,6 +198,8 @@ module tb_bpsk_burst;
     check("valid period", period, CLK_PER_SYM_450K);
     check("rptr frozen", rptr_end2, rptr_end);
     check("rptr tracks symbol index", rptr_err, 0);
+    check("busy right after rd_en", b_arm, 1);
+    check("busy low once the burst is done", b_end, 0);
     // the divider must keep running while the output is gated: 4000 clk of
     // period-400 pulses is 10 raw pulses against only 5 emitted symbols
     // (the pulse that arms tx_en is in there too -- it just reads nothing)
@@ -212,6 +221,8 @@ module tb_bpsk_burst;
     run(1'b1, 23'd0, 1'b0, 10'd0, 2500);
     check("valids", v_cnt, 0);
     check("read pulses", p_cnt, 0);
+    check("busy low when nothing is sent", b_arm, 0);
+    check("busy stays low", b_end, 0);
 
     // ---- F: re-arm the same burst again ----
     $display("F: single shot, sym_num=5, second run");
@@ -259,12 +270,17 @@ module tb_bpsk_burst;
     for (t = 0; t < 3000; t = t + 1) begin @(posedge clk); #1; if (rdata_valid) k_v = k_v + 1; end
     check("K valids while rd_en=0", k_v, 0);
     check("K tx_en closed", u_dut.tx_en, 0);
+    check("K busy cleared by rd_en=0", busy, 0);
     // stopping also clears the burst counters, so raising rd_en starts a fresh
     // turn at symbol 0 instead of resuming mid-table
     check("K rptr cleared", rptr, 0);
     check("K sym_cnt cleared", u_dut.sym_cnt, 0);
 
     @(negedge clk) ram_en = 1;                  // and back to 1
+    // busy follows rd_en, not the gate: it is high the very next clk, even though
+    // the first symbol waits for the next timebase window
+    @(posedge clk); #1;
+    check("K busy high right after rd_en=1", busy, 1);
     k_gap = -1; k_v = 0; k_period = -1; k_prev = -1;
     for (t = 0; t < 1026 * CLK_PER_SYM_450K; t = t + 1) begin
       @(posedge clk); #1;

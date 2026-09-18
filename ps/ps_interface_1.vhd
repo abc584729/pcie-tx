@@ -462,7 +462,8 @@ entity ps_interface_1 is
         ram_w_data_qpsk_ps  : out STD_LOGIC_VECTOR(15 downto 0);
         bpsk_sym_num_ps     : out STD_LOGIC_VECTOR(22 downto 0);
         bpsk_single_shot_ps : out STD_LOGIC;
-        bpsk_time_sel_ps    : out STD_LOGIC_VECTOR(9 downto 0)
+        bpsk_time_sel_ps    : out STD_LOGIC_VECTOR(9 downto 0);
+        bpsk_tx_busy    : in  STD_LOGIC
 	);
 end ps_interface_1;
 
@@ -930,7 +931,8 @@ component arm_interface_read_1 is
          flag_times_timestamp_cor_read: out std_logic;
          
          fft_data            : in std_logic_vector(15 downto 0);
-         flag_fft_bram_addrb : out std_logic
+         flag_fft_bram_addrb : out std_logic;
+         bpsk_tx_busy        : in  std_logic
          
    
 		   );
@@ -1380,7 +1382,8 @@ U2 : arm_interface_read_1 Port map (
         flag_times_timestamp_cor_read => flag_times_timestamp_cor_read,
         
         fft_data                  =>   fft_data,
-        flag_fft_bram_addrb       =>   flag_fft_bram_addrb
+        flag_fft_bram_addrb       =>   flag_fft_bram_addrb,
+        bpsk_tx_busy            =>   bpsk_tx_busy
                       
 );												
 end Behavioral;

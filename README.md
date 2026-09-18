@@ -36,11 +36,12 @@ pcie-tx/
 │   ├── arm_interface_write_1.vhd        # ARM 写接口
 │   ├── pcie_tx.h                        # 发射系统寄存器地址定义（0x700 起）
 │   ├── pcie_tx.c                        # 中频频点配置与发射初始化
-│   ├── adhocSoft.c                      # 自组网协议栈（UDP 控制命令 case 133/134/135/136）
+│   ├── adhocSoft.c                      # 自组网协议栈（UDP 控制命令 case 133/134/135/136/137）
 │   ├── Si5340_Data.h                    # Si5341 时钟芯片配置寄存器表
 │   ├── tx_configure.py                  # 上位机 UDP 配置命令（case 133：频点/衰减/使能/速率）
 │   ├── tx_start.py                      # 上位机 UDP 开播命令（case 135：单次发/循环发 + 符号数 + 起始时基）
 │   ├── tx_stop.py                       # 上位机 UDP 停发命令（case 136：0x702 = 0）
+│   ├── tx_status.py                     # 上位机读寄存器（case 137：读 0x71A bit0，回包给发命令的那台机器）
 │   ├── tx_ram_configure.py              # 符号表分片上传（case 134，64 包）
 │   └── gen_symbol_table.py              # 生成 1024 bit 分帧符号表（.bin，奇偶帧同步头）
 │
@@ -180,6 +181,7 @@ python tx_stop.py                                                     # 5. 停�
 | `ps/tx_ram_configure.py` | 发 case 134：整表分片、每包 512 字 = 1028 字节，BPSK **512 包** / QPSK **64 包**；`--table-sel` 必填，一次一张 |
 | `ps/tx_start.py` | 发 case 135：**循环发或单次发**（`--single`、`--size`）**和起始时基**（`--tsel`，见 §3.3），然后板上 `tx_start()` **开播** |
 | `ps/tx_stop.py` | 发 case 136：**停发**，就一笔 `emc_write(TX_REG_RAM_EN, 0)`。不复位，时基照常走；`rd_en` 拉低会一并清掉读指针和符号计数，所以下次开播必然从第 0 个符号开始 |
+| `ps/tx_status.py` | 发 case 137：**读任意寄存器并把值回包**（`--addr`，默认 `0x71A` bit0 = BPSK 发射状态，见 §3.5）；`--watch` 轮询。这是唯一会往回收包的脚本 |
 
 `tx_configure.py` 是唯一可以**边发边改**的：频点/衰减/速率/使能都在运行时可改，改完下一拍
 就生效，不需要停发。`rate_sel` 例外 —— 它同时改符号速率和 add 的截位方式，切了要重新灌表。
@@ -300,6 +302,9 @@ python gen_symbol_table.py -o part.bin  --bytes 256K --seed 0xC0FFEE      # 2048
 重复，和改动前"转满一圈回到 0"是同一个行为。**QPSK 没有这个功能**，
 `rtl/qpsk_ram.v` 一个字没动。
 
+`bpsk_ram` 这里还引出一个 1 位的发射状态 `busy`（1 = 正在发），一路送到 EMC 读译码器，
+ARM 能在 `0x71A` 读回来 —— 见 **§3.5**。
+
 寄存器（`ps/pcie_tx.h`）：
 
 | 地址 | 名称 | 含义 |
@@ -308,6 +313,7 @@ python gen_symbol_table.py -o part.bin  --bytes 256K --seed 0xC0FFEE      # 2048
 | 0x714 | `TX_REG_BPSK_SYM_NUM_H` | `sym_num[22:16]`，高 7 位，其余忽略 |
 | 0x716 | `TX_REG_BPSK_SINGLE_SHOT` | bit0：0 = 循环发（默认），1 = 单次发 |
 | 0x718 | `TX_REG_BPSK_TIME_SEL` | 起始时基 `time_sel`：0..1023，1024 个符号一圈，读门在时基计数走到该值时打开 |
+| 0x71A | `TX_REG_BPSK_BUSY` | **只读**：bit0 = 1 正在发射，0 空闲（见 §3.5）。只有 bit0 有效，其余位读回 0 |
 
 符号数与读指针是**两个独立计数器**：符号数 23 位（整表 4194304 个符号，见 §3.1 的位宽
 表），读指针仍是 22 位。组合起来就是一张真值表：
@@ -379,6 +385,9 @@ python tx_start.py --single 1 --size 256 --tsel 500   # 三样一起给
 python tx_stop.py                             # 停发（0x702 = 0）
 python tx_start.py --single 0                 # 重开播（tx_start() 脉冲 0x700，时基从 0 重来）
 ```
+
+停没停、发没发完，现在是可读的：`python tx_status.py`（`0x71A` bit0，见 **§3.5**）——
+停发之后它应该是 0；单次发跑完也会自己落回 0，而 `0x702` 还是 1。
 
 - **只写 `0x702` = 1**：一笔写、不复位，时基接着走，停多久都不影响相位。代价是开门窗口
   只有一拍宽、一圈才来一次，所以最多等一圈（1024 个符号，450k 档 2.276 ms）才恢复发数。
@@ -628,6 +637,113 @@ iverilog -g2005 -o /tmp/tb_upval.vvp rtl/zero_interpolator.v rtl/upsamping_*.v \
 实测 0 违反）、**输入停了 valid 必须落低**、突发期间 valid 为高。`tb/tb_tx.v` 另外在
 `iq`/DAC tvalid 这个边界上查同一条性质（两链都开、循环发，valid 必须为高且不能有数据被
 静音）。
+
+### 3.5 BPSK 发射状态读回（0x71A）
+
+#### 问题：PS 只能写，读不到发射机状态
+
+写完 `0x702 = 1` 之后，"正在发"、"单次发已经发完自己停了（`done`）"、"还在等时基窗口
+（最多 1024 个符号）"这三种情况在上位机看来一模一样 —— 没有任何寄存器能读回来。
+
+#### 做法：`bpsk_ram` 里维护一位 `busy`，一路引到 EMC 读译码器
+
+`rtl/bpsk_ram.v` 新增一个 1 位寄存器：
+
+```verilog
+// 发射状态：0x702（rd_en）有效就拉高；stop（单次发 done / sym_num=0）或者 rd_en 拉低就清 0。
+always @(posedge clk or negedge rst_n) begin
+    if(!rst_n) busy <= 1'b0;
+    else       busy <= rd_en & ~stop;
+end
+```
+
+`stop` 就是文件里已有的那根线（`single_shot && (done || sym_num == 0)`）。只打一拍、不组合
+输出，所以没有毛刺；`rd_en` 拉低同时也会清掉 `rptr` / `sym_cnt` / `done`，**这个位落下就等于
+"这一轮结束了"**。
+
+通路（每一步都是照现有信号的样子加的）：
+
+```
+rtl/bpsk_ram.v (新 output busy) → rtl/bpsk.v (tx_busy) → rtl/tx_top.v (bpsk_tx_busy)
+  → ps/top.vhd   COMPONENT tx_top + 新信号 + u_tx_top 映射
+  → ps/top.vhd   component ps_interface_1 + U2 映射
+  → ps/ps_interface_1.vhd  entity + component arm_interface_read_1 + U2 映射
+  → ps/arm_interface_read_1.vhd  entity + 地址常量 + 两级同步 + ps_din_128M 分支
+```
+
+VHDL 里端口列表是**三份**（entity / component / instance），一个信号三处都得加，漏一处就是
+端口不匹配 —— 合计 8 处 VHDL 端口编辑点 + 1 处信号声明。读地址取 **`0x71A`**，紧挨 TX 块最后
+一个 `0x718`：读表与写表里都空着。TX 寄存器走 EMC 片选 1（`mem_*_1` → `U2 :
+ps_interface_1`），所以读 `0x71A` 必然落到这个读译码器上。
+
+时钟域是同一个（`tx_top` 的 `clk` 就是 `clk_128M`，读 mux 也是 `clk_128M`），两级同步是照抄
+文件里其它输入的写法，不是必需。
+
+#### 语义：它回答的是"读门开着且这一轮没发完"
+
+| 情形 | `busy` |
+|------|--------|
+| `0x702 = 0`（停发） | 0 |
+| 单次发，正在发 | 1（`0x702` 一拉高就是 1，见下条） |
+| 单次发，发完（`done` 锁住） | **0** —— 此时 `0x702` 还是 1 |
+| 单次发，`sym_num = 0`（不发） | 0 |
+| 循环发 | 恒等于 `rd_en`，**没有完成沿**，只有 `0x702` 拉低才落 0 |
+
+- **不等于"真的有波出"**：`0x702` 拉高之后、时基窗口还没到的那段（最长 1024 个符号，
+  450k 档 2.276 ms）它已经是 1 了。要"真的有波"得改用 `tx_en`，一行的事。
+- **单次发 `sym_num = 0` 是个例外**：`stop` 由 `sym_num == 0` 组合出来，所以 `rd_en = 1` 而
+  `busy = 0` 会一直成立 —— "rd_en 有效就拉高"这条规则在这个角落不适用。
+- 它也不看 `bpsk_en`：`bpsk_en = 0` 把输出静音了，`busy` 照样是 1。
+
+#### 怎么读
+
+板上：`tx_get_bpsk_busy()`（`ps/pcie_tx.c`，`emc_read(TX_REG_BPSK_BUSY) & 0x1`）。
+
+上位机新增 `ps/tx_status.py`。原来自带的通用读命令 `case 7` 只把值 `xil_printf` 到串口
+就完了（它从 `lwip_read` 循环里调，发送方地址没接住），脚本拿不到值，所以加了 **case 137**：
+
+| 方向 | 字节 |
+|------|------|
+| 请求 | `[137, addrL, addrH]`（3 字节） |
+| 回包 | `[137, addrL, addrH, valL, valH]`（5 字节） |
+
+回包**发给发命令的那台机器**：`adhocCtrl` 的收包从 `lwip_read` 换成 `lwip_recvfrom`，把来源
+存进 `adhocCtrlPeer`，`ReplyToCmdSender()` 再 `lwip_sendto` 回去。**不需要**配什么目标地址
+——没走 `SendToConsole` 那条发给写死 `hostIPDef`（`192.168.1.1`）:32000 的路。
+
+```bash
+python tx_status.py                        # 读一次 0x71A bit0
+python tx_status.py --watch                # 轮询到 Ctrl-C
+python tx_status.py --watch --count 20     # 20 次，末尾给统计（高位次数、翻转次数）
+python tx_status.py --addr 0x702           # 任意地址
+```
+
+注意：
+
+- 一次 `emc_read` 是一笔 PL 往返事务（`recv_thread` 轮 `EMC_READ_FLAG_ADDR`），所以默认
+  `--interval 0.2` 秒一次，**别在板上紧循环里猛刷**。
+- **旧 bitstream 读 `0x71A` 返回 `0xAA55`**（未译码地址的兜底值），脚本会把它标出来 ——
+  正好用来区分"没这个功能"和"busy = 0"。
+- `case 137` 是通用的（任意地址），以后加 qpsk busy / done 直接在 `0x71A` 高位放就行，不用
+  再要新命令。
+
+#### 本地回归
+
+`tb/tb_bpsk_burst.v` 的 DUT 就是 `bpsk_ram`，新端口加上不破坏它（命名端口连接）。新断言：
+
+| case | 断言 |
+|------|------|
+| A 循环发 | `busy` 全程为 1 |
+| B 单次发 5 个 | `rd_en` 后为 1，`done` 之后落 0 |
+| E 单次发 `sym_num = 0` | `busy` 恒 0 |
+| K `rd_en` 拉低/拉高 | `rd_en = 0` 期间为 0；拉回 1 后**立刻**为 1（不等时基窗口） |
+
+```bash
+iverilog -g2005 -o /tmp/tb_bpsk_burst.vvp tb/tb_bpsk_burst.v rtl/bpsk_ram.v rtl/dpram.v \
+    && vvp /tmp/tb_bpsk_burst.vvp
+```
+
+VHDL 这条链本仓库仿真不了（缺 `rx_data_types` 包），靠人工核对三份端口列表是否一致。
 
 ## 四、新增速率的滤波器设计
 
