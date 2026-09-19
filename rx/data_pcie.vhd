@@ -143,111 +143,28 @@ signal data_out_5_complex_multiplier : std_logic_vector(79 downto 0);
 signal data_out_6_complex_multiplier : std_logic_vector(79 downto 0);
 signal data_out_7_complex_multiplier : std_logic_vector(79 downto 0);
 
-COMPONENT FIR_decimation_D4A
-  PORT (
-    aclk : IN STD_LOGIC;
-    s_axis_data_tvalid : IN STD_LOGIC;
-    s_axis_data_tready : OUT STD_LOGIC;
-    s_axis_data_tdata : IN STD_LOGIC_VECTOR(15 DOWNTO 0);
-    m_axis_data_tvalid : OUT STD_LOGIC;
-    m_axis_data_tdata : OUT STD_LOGIC_VECTOR(39 DOWNTO 0) );   -- 字节对齐: 输出宽度34 -> 端口40, 有效数据(33 downto 0)
+COMPONENT downsample_45m
+PORT (
+    clk        : IN  STD_LOGIC;
+    rst_n      : IN  STD_LOGIC;
+    din_iq     : IN  STD_LOGIC_VECTOR(255 DOWNTO 0);
+    din_valid  : IN  STD_LOGIC;
+    dout_iq    : OUT STD_LOGIC_VECTOR(31 DOWNTO 0);
+    dout_valid : OUT STD_LOGIC
+);
 END COMPONENT;
-signal dout_I_internal_D4A : std_logic_vector(39 downto 0);
-signal dout_Q_internal_D4A : std_logic_vector(39 downto 0);
-signal dout_I_internal_D4A_delay : std_logic_vector(16 downto 0);
-signal dout_Q_internal_D4A_delay : std_logic_vector(16 downto 0);
-signal rdy_FIR_decimation_D4A : std_logic;
-signal rdy_FIR_decimation_D4A_delay : std_logic;
 
-
-COMPONENT FIR_decimation_D8
-  PORT (
-    aclk : IN STD_LOGIC;
-    s_axis_data_tvalid : IN STD_LOGIC;
-    s_axis_data_tready : OUT STD_LOGIC;
-    s_axis_data_tdata : IN STD_LOGIC_VECTOR(127 DOWNTO 0);
-    m_axis_data_tvalid : OUT STD_LOGIC;
-    m_axis_data_tdata : OUT STD_LOGIC_VECTOR(39 DOWNTO 0)       -- 字节对齐: 输出宽度36 -> 端口40, 有效数据(35 downto 0)
-  );
-END COMPONENT;
-signal data_dds_out_I : std_logic_vector(127 downto 0);
-signal data_dds_out_Q : std_logic_vector(127 downto 0);
-signal data_200M_I    : std_logic_vector(39 downto 0);
-signal data_200M_Q    : std_logic_vector(39 downto 0);
-signal data_200M_I_delay    : std_logic_vector(16 downto 0);
-signal data_200M_Q_delay    : std_logic_vector(16 downto 0);
-
-signal data_out_internal : std_logic_vector(31 downto 0);   -- data_out 是 out 端口，VHDL-93 不能读，用这个中转给 ila
+signal din_iq         : std_logic_vector(255 downto 0);
+signal dds_dout_iq    : std_logic_vector(31 downto 0);
+signal dds_dout_valid : std_logic;
 
 COMPONENT ila_data_dds_downsample
 PORT (
-	clk : IN STD_LOGIC;
-	probe0 : IN STD_LOGIC; 
-	probe1 : IN STD_LOGIC_VECTOR(31 DOWNTO 0); 
-	probe2 : IN STD_LOGIC_VECTOR(31 DOWNTO 0); 
-	probe3 : IN STD_LOGIC_VECTOR(31 DOWNTO 0); 
-	probe4 : IN STD_LOGIC_VECTOR(31 DOWNTO 0); 
-	probe5 : IN STD_LOGIC_VECTOR(31 DOWNTO 0); 
-	probe6 : IN STD_LOGIC_VECTOR(31 DOWNTO 0); 
-	probe7 : IN STD_LOGIC_VECTOR(31 DOWNTO 0); 
-	probe8 : IN STD_LOGIC_VECTOR(31 DOWNTO 0); 
-	probe9 : IN STD_LOGIC_VECTOR(31 DOWNTO 0); 
-	probe10 : IN STD_LOGIC_VECTOR(15 DOWNTO 0); 
-	probe11 : IN STD_LOGIC_VECTOR(15 DOWNTO 0); 
-	probe12 : IN STD_LOGIC_VECTOR(15 DOWNTO 0); 
-	probe13 : IN STD_LOGIC_VECTOR(15 DOWNTO 0); 
-	probe14 : IN STD_LOGIC_VECTOR(15 DOWNTO 0); 
-	probe15 : IN STD_LOGIC_VECTOR(15 DOWNTO 0); 
-	probe16 : IN STD_LOGIC_VECTOR(15 DOWNTO 0); 
-	probe17 : IN STD_LOGIC_VECTOR(15 DOWNTO 0); 
-	probe18 : IN STD_LOGIC_VECTOR(15 DOWNTO 0); 
-	probe19 : IN STD_LOGIC_VECTOR(15 DOWNTO 0); 
-	probe20 : IN STD_LOGIC_VECTOR(15 DOWNTO 0); 
-	probe21 : IN STD_LOGIC_VECTOR(15 DOWNTO 0); 
-	probe22 : IN STD_LOGIC_VECTOR(15 DOWNTO 0); 
-	probe23 : IN STD_LOGIC_VECTOR(15 DOWNTO 0); 
-	probe24 : IN STD_LOGIC_VECTOR(15 DOWNTO 0); 
-	probe25 : IN STD_LOGIC_VECTOR(15 DOWNTO 0); 
-	probe26 : IN STD_LOGIC_VECTOR(15 DOWNTO 0); 
-	probe27 : IN STD_LOGIC_VECTOR(15 DOWNTO 0); 
-	probe28 : IN STD_LOGIC_VECTOR(15 DOWNTO 0); 
-	probe29 : IN STD_LOGIC_VECTOR(15 DOWNTO 0); 
-	probe30 : IN STD_LOGIC_VECTOR(15 DOWNTO 0); 
-	probe31 : IN STD_LOGIC_VECTOR(15 DOWNTO 0); 
-	probe32 : IN STD_LOGIC_VECTOR(15 DOWNTO 0); 
-	probe33 : IN STD_LOGIC_VECTOR(15 DOWNTO 0); 
-	probe34 : IN STD_LOGIC_VECTOR(15 DOWNTO 0); 
-	probe35 : IN STD_LOGIC_VECTOR(15 DOWNTO 0); 
-	probe36 : IN STD_LOGIC_VECTOR(15 DOWNTO 0); 
-	probe37 : IN STD_LOGIC_VECTOR(15 DOWNTO 0); 
-	probe38 : IN STD_LOGIC_VECTOR(15 DOWNTO 0); 
-	probe39 : IN STD_LOGIC_VECTOR(15 DOWNTO 0); 
-	probe40 : IN STD_LOGIC_VECTOR(15 DOWNTO 0); 
-	probe41 : IN STD_LOGIC_VECTOR(15 DOWNTO 0); 
-	probe42 : IN STD_LOGIC_VECTOR(32 DOWNTO 0); 
-	probe43 : IN STD_LOGIC_VECTOR(32 DOWNTO 0); 
-	probe44 : IN STD_LOGIC_VECTOR(32 DOWNTO 0); 
-	probe45 : IN STD_LOGIC_VECTOR(32 DOWNTO 0); 
-	probe46 : IN STD_LOGIC_VECTOR(32 DOWNTO 0); 
-	probe47 : IN STD_LOGIC_VECTOR(32 DOWNTO 0); 
-	probe48 : IN STD_LOGIC_VECTOR(32 DOWNTO 0); 
-	probe49 : IN STD_LOGIC_VECTOR(32 DOWNTO 0); 
-	probe50 : IN STD_LOGIC_VECTOR(32 DOWNTO 0); 
-	probe51 : IN STD_LOGIC_VECTOR(32 DOWNTO 0); 
-	probe52 : IN STD_LOGIC_VECTOR(32 DOWNTO 0); 
-	probe53 : IN STD_LOGIC_VECTOR(32 DOWNTO 0); 
-	probe54 : IN STD_LOGIC_VECTOR(32 DOWNTO 0); 
-	probe55 : IN STD_LOGIC_VECTOR(32 DOWNTO 0); 
-	probe56 : IN STD_LOGIC_VECTOR(32 DOWNTO 0); 
-	probe57 : IN STD_LOGIC_VECTOR(32 DOWNTO 0); 
-	probe58 : IN STD_LOGIC_VECTOR(39 DOWNTO 0); 
-	probe59 : IN STD_LOGIC_VECTOR(39 DOWNTO 0); 
-	probe60 : IN STD_LOGIC_VECTOR(39 DOWNTO 0); 
-	probe61 : IN STD_LOGIC_VECTOR(39 DOWNTO 0); 
-	probe62 : IN STD_LOGIC;
-	probe63 : IN STD_LOGIC
+    clk    : IN STD_LOGIC;
+    probe0 : IN STD_LOGIC_VECTOR(31 DOWNTO 0);   -- downsample_45m 的 {q,i} 输出
+    probe1 : IN STD_LOGIC_VECTOR( 0 DOWNTO 0)    -- downsample_45m 的 dout_valid
 );
-END COMPONENT  ;
+END COMPONENT;
 
 --COMPONENT ila_data_dds_out
 --PORT (
@@ -257,24 +174,6 @@ END COMPONENT  ;
 --);
 --END COMPONENT  ;
 
---- FIR 链路观察 ila：看 D8(36bit) / D4A(34bit) 全精度输出里信号落在哪几位，用来核对截位位置 -----
---- 只做调试用；不需要时把这段 component、下面的 U24 例化和 data_out_internal 一起删掉即可
-COMPONENT ila_data_pcie_fir
-PORT (
-    clk : IN STD_LOGIC;
-    probe0  : IN STD_LOGIC_VECTOR(35 DOWNTO 0);   -- data_200M_I(35:0)           D8 I 有效数据 36bit (端口40bit)
-    probe1  : IN STD_LOGIC_VECTOR(35 DOWNTO 0);   -- data_200M_Q(35:0)           D8 Q 有效数据 36bit (端口40bit)
-    probe2  : IN STD_LOGIC_VECTOR(16 DOWNTO 0);   -- data_200M_I_delay           D8 截位后 (25:9)+1
-    probe3  : IN STD_LOGIC_VECTOR(16 DOWNTO 0);   -- data_200M_Q_delay           D8 截位后 (25:9)+1
-    probe4  : IN STD_LOGIC_VECTOR(33 DOWNTO 0);   -- dout_I_internal_D4A(33:0)   D4A I 有效数据 34bit (端口40bit)
-    probe5  : IN STD_LOGIC_VECTOR(33 DOWNTO 0);   -- dout_Q_internal_D4A(33:0)   D4A Q 有效数据 34bit (端口40bit)
-    probe6  : IN STD_LOGIC_VECTOR(16 DOWNTO 0);   -- dout_I_internal_D4A_delay   D4A 截位后 (26:10)+1
-    probe7  : IN STD_LOGIC_VECTOR(16 DOWNTO 0);   -- dout_Q_internal_D4A_delay   D4A 截位后 (26:10)+1
-    probe8  : IN STD_LOGIC_VECTOR(31 DOWNTO 0);   -- data_out_internal           最终输出 (Q & I)
-    probe9  : IN STD_LOGIC;                       -- rdy_FIR_decimation_D4A
-    probe10 : IN STD_LOGIC                        -- rdy_FIR_decimation_D4A_delay (= data_out_valid 的前一拍)
-);
-END COMPONENT;
 
 begin
 
@@ -431,155 +330,24 @@ U15 : carrier_frequency_converter_complex_multiplier_data port map ( aclk => clk
                                                                 m_axis_dout_tvalid => open,
                                                                 m_axis_dout_tdata => data_out_7_complex_multiplier );  
 
-U16 : FIR_decimation_D8
-  PORT MAP (
-    aclk => clk,
-    s_axis_data_tvalid => '1',
-    s_axis_data_tready => open,
-    s_axis_data_tdata => data_dds_out_I,
-    m_axis_data_tvalid => open,
-    m_axis_data_tdata => data_200M_I
-  );
-  
-
-  
-U17 : FIR_decimation_D8
-PORT MAP (
-    aclk => clk,
-    s_axis_data_tvalid => '1',
-    s_axis_data_tready => open,
-    s_axis_data_tdata => data_dds_out_Q,
-    m_axis_data_tvalid => open,
-    m_axis_data_tdata => data_200M_Q
+--- 两级抽取（÷8 多相 + ÷4）用自写模块替换原来的 FIR_decimation_D8 / FIR_decimation_D4A -----
+--- 输入为 RFDC 风格 256bit：{q7,i7,...,q0,i0}，lane0 最早；输出原生直通，定标上板用 ILA 标定 --
+U16 : downsample_45m
+port map(
+    clk        => clk,
+    rst_n      => reset,        -- 本文件 reset 为低有效，即 rst_n
+    din_iq     => din_iq,
+    din_valid  => '1',          -- 与原来 FIR IP 的 s_axis_data_tvalid => '1' 一致
+    dout_iq    => dds_dout_iq,
+    dout_valid => dds_dout_valid
 );
-process(reset,clk)
-begin
-    if reset = '0' then
-        data_200M_I_delay <= (others => '0');
-    elsif clk'event and clk = '1' then
-        data_200M_I_delay <= data_200M_I(25 downto 9) + 1;
-    end if;
-end process;
 
-process(reset,clk)
-begin
-    if reset = '0' then
-        data_200M_Q_delay <= (others => '0');
-    elsif clk'event and clk = '1' then
-        data_200M_Q_delay <= data_200M_Q(25 downto 9) + 1;
-    end if;
-end process;
-
-                                                                
-U18 : FIR_decimation_D4A port map ( aclk => clk,
-                                  s_axis_data_tvalid => '1',
-                                  s_axis_data_tready => open,
-                                  s_axis_data_tdata => data_200M_I_delay(16 downto 1),
-                                  m_axis_data_tvalid => rdy_FIR_decimation_D4A,
-                                  m_axis_data_tdata => dout_I_internal_D4A );
-                                  
-U19 : FIR_decimation_D4A port map ( aclk => clk,
-                                  s_axis_data_tvalid => '1',
-                                  s_axis_data_tready => open,
-                                  s_axis_data_tdata => data_200M_Q_delay(16 downto 1),
-                                  m_axis_data_tvalid => open,
-                                  m_axis_data_tdata => dout_Q_internal_D4A );   
-                                  
-process(reset,clk)
-begin
-    if reset = '0' then
-        dout_I_internal_D4A_delay <= (others => '0');
-    elsif clk'event and clk = '1' then
-        dout_I_internal_D4A_delay <= dout_I_internal_D4A(26 downto 10) + 1;
-    end if;
-end process;
-
-process(reset,clk)
-begin
-    if reset = '0' then
-        dout_Q_internal_D4A_delay <= (others => '0');
-    elsif clk'event and clk = '1' then
-        dout_Q_internal_D4A_delay <= dout_Q_internal_D4A(26 downto 10) + 1;
-    end if;
-end process;  
-
-process(reset,clk)
-begin
-    if reset = '0' then
-        rdy_FIR_decimation_D4A_delay <= '0';
-    elsif clk'event and clk = '1' then
-        rdy_FIR_decimation_D4A_delay <= rdy_FIR_decimation_D4A;
-    end if;
-end process;  
-
---U22 : ila_data_dds_downsample
---port map(
---    clk => clk                                                                      ,
---    probe0      =>      reset_DDS                                                   ,
---    probe1      =>      phase_PINC                                                  ,
---    probe2      =>      phase_POFF_0                                                ,
---    probe3      =>      phase_POFF_1                                                ,
---    probe4      =>      phase_POFF_2                                                ,
---    probe5      =>      phase_POFF_3                                                ,
---    probe6      =>      phase_POFF_4                                                ,
---    probe7      =>      phase_POFF_5                                                ,
---    probe8      =>      phase_POFF_6                                                ,
---    probe9      =>      phase_POFF_7                                                ,
---    probe10     =>      data_in_0(31 downto 16)                                     ,
---    probe11     =>      data_in_1(31 downto 16)                                     ,
---    probe12     =>      data_in_2(31 downto 16)                                     ,
---    probe13     =>      data_in_3(31 downto 16)                                     ,
---    probe14     =>      data_in_4(31 downto 16)                                     ,
---    probe15     =>      data_in_5(31 downto 16)                                     ,
---    probe16     =>      data_in_6(31 downto 16)                                     ,
---    probe17     =>      data_in_7(31 downto 16)                                     ,
---    probe18     =>      data_in_0(15 downto 0)                                      ,
---    probe19     =>      data_in_1(15 downto 0)                                      ,
---    probe20     =>      data_in_2(15 downto 0)                                      ,
---    probe21     =>      data_in_3(15 downto 0)                                      ,
---    probe22     =>      data_in_4(15 downto 0)                                      ,
---    probe23     =>      data_in_5(15 downto 0)                                      ,
---    probe24     =>      data_in_6(15 downto 0)                                      ,
---    probe25     =>      data_in_7(15 downto 0)                                      ,
---    probe26     =>      m_axis_data_tdata_0(31 downto 16)                           ,
---    probe27     =>      m_axis_data_tdata_1(31 downto 16)                           ,
---    probe28     =>      m_axis_data_tdata_2(31 downto 16)                           ,
---    probe29     =>      m_axis_data_tdata_3(31 downto 16)                           ,
---    probe30     =>      m_axis_data_tdata_4(31 downto 16)                           ,
---    probe31     =>      m_axis_data_tdata_5(31 downto 16)                           ,
---    probe32     =>      m_axis_data_tdata_6(31 downto 16)                           ,
---    probe33     =>      m_axis_data_tdata_7(31 downto 16)                           ,
---    probe34     =>      m_axis_data_tdata_0(15 downto 0)                            ,
---    probe35     =>      m_axis_data_tdata_1(15 downto 0)                            ,
---    probe36     =>      m_axis_data_tdata_2(15 downto 0)                            ,
---    probe37     =>      m_axis_data_tdata_3(15 downto 0)                            ,
---    probe38     =>      m_axis_data_tdata_4(15 downto 0)                            ,
---    probe39     =>      m_axis_data_tdata_5(15 downto 0)                            ,
---    probe40     =>      m_axis_data_tdata_6(15 downto 0)                            ,
---    probe41     =>      m_axis_data_tdata_7(15 downto 0)                            ,
---    probe42     =>      data_out_0_complex_multiplier(72 downto 40)                 ,
---    probe43     =>      data_out_1_complex_multiplier(72 downto 40)                 ,
---    probe44     =>      data_out_2_complex_multiplier(72 downto 40)                 ,
---    probe45     =>      data_out_3_complex_multiplier(72 downto 40)                 ,
---    probe46     =>      data_out_4_complex_multiplier(72 downto 40)                 ,
---    probe47     =>      data_out_5_complex_multiplier(72 downto 40)                 ,
---    probe48     =>      data_out_6_complex_multiplier(72 downto 40)                 ,
---    probe49     =>      data_out_7_complex_multiplier(72 downto 40)                 ,
---    probe50     =>      data_out_0_complex_multiplier(32 downto 0)                  ,
---    probe51     =>      data_out_1_complex_multiplier(32 downto 0)                  ,
---    probe52     =>      data_out_2_complex_multiplier(32 downto 0)                  ,
---    probe53     =>      data_out_3_complex_multiplier(32 downto 0)                  ,
---    probe54     =>      data_out_4_complex_multiplier(32 downto 0)                  ,
---    probe55     =>      data_out_5_complex_multiplier(32 downto 0)                  ,
---    probe56     =>      data_200M_I                                                 ,
---    probe57     =>      data_200M_Q                                                 ,
---    probe58     =>      dout_I_internal_delay                                       ,
---    probe59     =>      dout_Q_internal_delay                                       ,
---    probe60     =>      dout_I_internal                                             ,
---    probe61     =>      dout_Q_internal                                             ,
---    probe62     =>      '1'                                                         ,
---    probe63     =>      '1'
---);
+U22 : ila_data_dds_downsample
+port map(
+    clk    => clk,
+    probe1(0) => dds_dout_valid,
+    probe1 => (0 => dds_dout_valid)
+);
 
 --U23 : ila_data_dds_out                              
 --PORT MAP(
@@ -734,39 +502,22 @@ begin
         data_out_7_Q(16 downto 0) <= data_out_7_complex_multiplier(69 downto 53) + 1;
     end if;
 end process;
-data_dds_out_I <= data_out_7_I(16 downto 1)& data_out_6_I(16 downto 1)& data_out_5_I(16 downto 1) & data_out_4_I(16 downto 1) & data_out_3_I(16 downto 1) & data_out_2_I(16 downto 1) & data_out_1_I(16 downto 1) & data_out_0_I(16 downto 1);
-data_dds_out_Q <= data_out_7_Q(16 downto 1) & data_out_6_Q(16 downto 1) & data_out_5_Q(16 downto 1) & data_out_4_Q(16 downto 1) & data_out_3_Q(16 downto 1) & data_out_2_Q(16 downto 1) & data_out_1_Q(16 downto 1) & data_out_0_Q(16 downto 1);
 
-process(reset,clk)
-begin
-    if reset = '0' then
-       data_out_valid <=  '0';
-    elsif clk'event and clk = '1' then
-       data_out_valid <= rdy_FIR_decimation_D4A_delay;
-    end if;
-end process;
+din_iq <= data_out_7_Q(16 downto 1) & data_out_7_I(16 downto 1) &
+          data_out_6_Q(16 downto 1) & data_out_6_I(16 downto 1) &
+          data_out_5_Q(16 downto 1) & data_out_5_I(16 downto 1) &
+          data_out_4_Q(16 downto 1) & data_out_4_I(16 downto 1) &
+          data_out_3_Q(16 downto 1) & data_out_3_I(16 downto 1) &
+          data_out_2_Q(16 downto 1) & data_out_2_I(16 downto 1) &
+          data_out_1_Q(16 downto 1) & data_out_1_I(16 downto 1) &
+          data_out_0_Q(16 downto 1) & data_out_0_I(16 downto 1);
 
-data_out_internal <= dout_Q_internal_D4A_delay(16 downto 1) & dout_I_internal_D4A_delay(16 downto 1);
-data_out <= data_out_internal;
+--- 输出原生直通：dout_iq 是 downsample_4 的输出寄存器，dout_valid 是 d4_ce_del 的寄存器
+--- 输出，两者天然对齐、与旧链一样是 1/4 占空，这里不再额外打拍（ps/top.vhd 还会再寄一拍）-
+data_out       <= dds_dout_iq;
+data_out_valid <= dds_dout_valid;
                         
                                                                                                                                                                                      
                                                                                                                                          
-
---- FIR 链路观察 ila（调试用，可整段删除）-----------------------------------------------------
-U24 : ila_data_pcie_fir
-port map(
-    clk => clk,
-    probe0  => data_200M_I(35 downto 0),
-    probe1  => data_200M_Q(35 downto 0),
-    probe2  => data_200M_I_delay,
-    probe3  => data_200M_Q_delay,
-    probe4  => dout_I_internal_D4A(33 downto 0),
-    probe5  => dout_Q_internal_D4A(33 downto 0),
-    probe6  => dout_I_internal_D4A_delay,
-    probe7  => dout_Q_internal_D4A_delay,
-    probe8  => data_out_internal,
-    probe9  => rdy_FIR_decimation_D4A,
-    probe10 => rdy_FIR_decimation_D4A_delay
-);
 
 end Behavioral;

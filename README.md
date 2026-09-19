@@ -20,12 +20,16 @@ pcie-tx/
 │   ├── dds_x8.v                         # 8 路并行 DDS，频谱搬移至中频
 │   ├── digital_attenuator.v             # 数字衰减器（另有 _iq 双路版本）
 │   ├── add.v                            # 8 通道 I/Q 数据逐通道求和
+│   ├── downsample_8_par.v               # 8 倍抽取抗混叠，多相并行（手写，逐比特对齐 d_8.v）
+│   ├── downsample_4.v                   # 4 倍抽取抗混叠（MATLAB d_4.v 原样搬入）
+│   ├── downsample_45m.v                 # 采集抽取链顶层：÷32 抽取（名字沿用早期 45 MSPS 目标）
 │   └── dpram.v                          # 双口 RAM
 │
 ├── tb/
 │   ├── tb_tx.v                          # 发射链路仿真 testbench
 │   ├── tb_bpsk_rate.v                   # BPSK 双速率 / 链路选择检查
-│   └── tb_bpsk_burst.v                  # BPSK 循环发 / 单次发检查
+│   ├── tb_bpsk_burst.v                  # BPSK 循环发 / 单次发检查
+│   └── tb_downsample_45m.v              # 抽取链逐比特比对（对手写 vs d_8/d_4 生成代码）
 ├── tcl/
 │   ├── ila.tcl                          # ILA 调试脚本
 │   └── vio.tcl                          # VIO 调试脚本
@@ -59,6 +63,11 @@ pcie-tx/
 │   │   ├── anti_aliasing_filter_5.fda   # 5 倍抽取抗混叠滤波器
 │   │   ├── anti_aliasing_filter_8.fda   # 8 倍抽取抗混叠滤波器（多相）
 │   │   └── anti_aliasing_filter_10.fda  # 10 倍抽取抗混叠滤波器
+│   ├── downsampling/                    # 采集侧抽取滤波器
+│   │   ├── d_8.fda / d_4.fda            # 8 倍多相抽取、4 倍抽取
+│   │   ├── model.slx                    # 抽取链 Simulink 模型
+│   │   ├── simulink_analysis.m          # 抽取后频谱/时域分析
+│   │   └── hdlsrc/                      # d_8/、d_4/ 生成代码
 │   └── hdlsrc/                          # HDL Coder 生成的滤波器 RTL
 │       ├── rcos_filter/                 # 每个滤波器一套：生成代码 + testbench + 编译脚本
 │       ├── anti_imaging_filter_5/
@@ -792,6 +801,8 @@ VHDL 这条链本仓库仿真不了（缺 `rx_data_types` 包），靠人工核�
 
 ## 五、采集的抽取滤波器设计
 
+### 5.1 设计目标（早期方案，8×3×4 = ÷96 → 15 MHz）
+
 1.44g 抽到15m
 
 | 级       | 输入带宽 | 通带 | 阻带 |
@@ -799,3 +810,109 @@ VHDL 这条链本仓库仿真不了（缺 `rx_data_types` 包），靠人工核�
 | 8 倍抽取 | π/96     |      | pi/8 |
 | 3倍抽取  | π/12     |      | pi/3 |
 | 4倍抽取  | π/4      |      | pi/4 |
+
+> **注意**：`matlab/downsampling/` 里实际设计并生成代码的是 **8 倍 + 4 倍 = ÷32 → 45 MHz**
+> 两级（`simulink_analysis.m` 的 `fs = 1.44e9/8/4`），上表中间那级 **3 倍抽取没有做**，
+> 这一栏保留为设计记录。RTL 实现见 5.2。
+
+### 5.2 RTL 实现（8 倍 + 4 倍 = ÷32）
+
+抽取率：**÷8 → ÷4 = ÷32**，fabric 每拍 8 个样点。
+
+> **实际速率以例化点的时钟为准。** 模块名 `downsample_45m` 沿用早期"1.44 GSPS ÷ 32 =
+> 45 MSPS"的目标（`simulink_analysis.m` 里 `fs = 1.44e9/8/4`），但真正例化它的
+> `rx/data_pcie.vhd` 挂的是 **`clk_128M`**（`ps/top.vhd` 里 `U9_0` 的 `clk`，
+> 来自 `clk_wiz_1` 的 `clk_out1`），8 个 lane 来自内部调制器 `din_mod_final_k`。
+> 所以这条链实际是 **8 × 128 MHz = 1.024 GSPS ÷ 32 = 32 MSPS**。
+> **滤波器形状不受影响**（响应是归一化的，与绝对时钟无关），128 MHz 也比模块原本
+> 按 180 MHz 写的时序目标更宽松；只有名字和上表的绝对速率对不上。
+
+| 文件 | 模块 | 说明 |
+|------|------|------|
+| `rtl/downsample_8_par.v` | `downsample_8_par` | **手写**。128 bit（8 样点）/`clk_enable` 进、1 样点出，49 抽头 7 相多相抽取，对 `matlab/downsampling/hdlsrc/d_8/d_8.v` 逐比特一致 |
+| `rtl/downsample_4.v` | `downsample_4` | **`d_4.v` 原样搬入**，只改模块名和头注释，数据通路一字不动。62 抽头，**没有 `ce_out`**，÷4 由外部把 `clk_enable` 做成 4 拍一次实现 |
+| `rtl/downsample_45m.v` | `downsample_45m` | 顶层。256 bit RFDC IQ 总线 `{q7,i7,...,q0,i0}` 进、32 bit `{q,i}` 出，`dout_valid` 4 拍一次 |
+
+`d_8.v` 必须手写的原因和当年抗镜像滤波器一样：它每个 `clk_enable` 只吃 1 个样点
+（多相分支靠 8 拍轮流复用），要吃掉 1.44 GSPS 就得给 1.44 GHz 时钟。并行版一拍把 8 个相
+全算完，于是**不需要多相选通、不需要 mux、不需要相位计数器**——第 `i` 个抽头固定读
+历史窗的第 `7+i` 个槽位，即 `y[m] = Σ h[i]·x[8m-i]`，所有下标在综合期就是常量。
+
+逐比特一致只需要守住两处：**乘积那一次截位**（s32_En30 → `product[30:0]`）和**最后那一次
+convergent rounding**（`(sum6 + {sum6[20],{19{~sum6[20]}}})>>>20`）。累加树每个节点都等价于
+"精确和 mod 2^36"，而模加可结合，所以**加法树的分组和流水线深度随便排**，结果不变。
+
+接口：
+
+```verilog
+module downsample_45m(
+    input               clk,          // 180 MHz fabric
+    input               rst_n,
+    input      [255:0]  din_iq,       // {q7,i7, q6,i6, ..., q1,i1, q0,i0}
+    input               din_valid,    // 这拍 256 bit 是真数据（硬件里恒为 1）
+    output     [31:0]   dout_iq,      // {q, i}，s16_En13
+    output              dout_valid    // 4 拍一次
+);
+```
+
+- lane k 在 `din_iq[32*k +: 32]`：`i_k = din_iq[32*k +: 16]`、`q_k = din_iq[32*k+16 +: 16]`；
+  lane0 = 组内最早的样点。
+- `din_valid` 做成输入而不是硬接 1，是为了让 testbench 能把本模块和"1 样点/`clk_enable`"
+  的生成代码放在同一条时间轴上跑（TB 里把它做成 8 拍一次）。用法与 `upsamping_6667k` 一致。
+- 输入断流后 `dout_valid` 会自己拉低（内部有 16 拍空闲计数做 flush），不会一直举着最后一个
+  样点，下游也就不会把陈旧数据当成连续有效数据。
+
+**验证**（黄金模型 = MATLAB 生成的两个文件，DUT = 手写模块，同一份激励同时喂）：
+
+```bash
+iverilog -g2005 -o /tmp/ds45.vvp \
+    rtl/downsample_8_par.v rtl/downsample_4.v rtl/downsample_45m.v \
+    matlab/downsampling/hdlsrc/d_8/d_8.v matlab/downsampling/hdlsrc/d_4/d_4.v \
+    tb/tb_downsample_45m.v
+vvp /tmp/ds45.vvp +mode=0      # 0 噪声 / 1 冲激 / 2 斜坡 / 3 chirp
+vvp /tmp/ds45.vvp +mode=0 +hold=1   # 附加：输入断流后 dout_valid 必须拉低
+```
+
+四种激励下 I/Q 两路的整条输出流 **0 个不一致**；另外断言了 `dout_valid` 严格 4 拍一次。
+
+### 5.3 在 `rx/data_pcie.vhd` 里的例化
+
+`rx/data_pcie.vhd` 原来用两个 Vivado FIR Compiler IP 做这两级抽取
+（`U16/U17 : FIR_decimation_D8` → 截位 → `U18/U19 : FIR_decimation_D4A`），
+现已**整段换成 `U16 : downsample_45m`**：DDS/混频那一段（`U0..U15` 和
+`data_out_k_I/Q` 的截位）一个字节没动，只有抽取级换了实现。
+
+```vhdl
+U16 : downsample_45m
+port map(
+    clk        => clk,          -- = clk_128M
+    rst_n      => reset,        -- 本文件 reset 为低有效，即 rst_n
+    din_iq     => din_iq,
+    din_valid  => '1',          -- 与原来 FIR IP 的 s_axis_data_tvalid => '1' 一致
+    dout_iq    => dds_dout_iq,
+    dout_valid => dds_dout_valid
+);
+```
+
+- `din_iq` 由 `data_out_k_Q(16 downto 1) & data_out_k_I(16 downto 1)` 按
+  `{q7,i7,...,q0,i0}` 交织而成（lane0 在最低位 = 组内最早的样点），
+  和 `downsample_45m` 内部拆包所期望的顺序一致。
+- **`data_pcie` 的对外端口一个都没改**，`ps/top.vhd` 里的 `U9_0` 例化也不用动。
+- 抽取率没变（÷8 × ÷4 = ÷32），所以 `data_out_valid` 仍是 `clk/4` = 1/4 占空、
+  速率仍是 **32 MSPS**；**变的是数值定标**——现在是原生直通、不做移位截位，
+  和旧 FIR 链不同，需要上板用 ILA 标定。
+- ILA `ila_data_dds_downsample` 改成 2 个探针抓抽取输出：
+
+  ```vhdl
+  COMPONENT ila_data_dds_downsample
+  PORT (
+      clk    : IN STD_LOGIC;
+      probe0 : IN STD_LOGIC_VECTOR(31 DOWNTO 0);   -- dds_dout_iq
+      probe1 : IN STD_LOGIC_VECTOR( 0 DOWNTO 0)    -- dds_dout_valid
+  );
+  END COMPONENT;
+  ```
+
+  这个 IP **需要在本仓库外的 Vivado 工程里重新生成**（两个探针都要独立、不要 merge），
+  同时把 `rtl/downsample_8_par.v` / `downsample_4.v` / `downsample_45m.v` 加进工程；
+  原来那个 `ila_data_pcie_fir`（U24）连同它的 component 已经删除，IP 可以从工程里删掉。
