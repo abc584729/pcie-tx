@@ -24,6 +24,7 @@ module bpsk_ram(
     input clk, rst_n,
     input rd_en,      
     input [9:0] time_sel,       
+    input [8:0] clock_sel,      // 圈内第几拍开闸 0..count_max-1；写 >= count_max 当末拍
     input rate_sel,          
     input w_en,                
     input [17:0] w_addr,
@@ -59,19 +60,27 @@ module bpsk_ram(
         end
     end
     
-    // 读使能：时基计数值走到 time_sel 那一刻开门（窗口只有一拍宽，一圈 1024 个符号才来一次），
+    // clock_sel 兜底：写进来的值 >= count_max 时按"末拍"处理。这样 450k(400)/400k(450)
+    // 两种速率下，复位值 511 和 VIO 模式接的 511 都落到各自的 count_max-1，
+    // 等于老的"分频脉冲那一拍开闸"的行为，一个复位值就管住两种速率。
+    wire [8:0] csel = (clock_sel >= count_max) ? (count_max - 1'b1) : clock_sel;
+
+    // 读使能：时基计数值走到 time_sel 那一圈、圈内第 csel 拍开门（窗口只有一拍宽，
+    // 一圈 1024 个符号才来一次）。csel = count_max-1 就是老行为（分频脉冲那一拍）；
+    // 小于它就是把开闸点在圈内往前挪，做比 1/Rs 更细的时间校准。
     // rd_en 拉低立刻关门，所以 0x702 仍然是"停发"开关。
     // 注意：再拉高时要等时基下一圈转回 time_sel 才重新开门，最多等 1024 个符号。
     reg tx_en;
     always @(posedge clk or negedge rst_n) begin
         if(!rst_n) tx_en <= 0;
-        else if(rd_en && cnt_1024 == time_sel && count == count_max - 1'b1) tx_en <= 1;
+        else if(rd_en && cnt_1024 == time_sel && count == csel) tx_en <= 1;
         else if(!rd_en) tx_en <= 0;
         else tx_en <= tx_en;
     end
     
-    // 读脉冲
-    wire flag = tx_en && (count == count_max - 1'b1);
+    // 读脉冲：和开闸同相。tx_en 是寄存器，开闸那一拍这里还是 0，所以第一个符号
+    // 恰好落在开闸之后一个完整符号周期 —— 开闸点连续可调，读时刻就连续可调。
+    wire flag = tx_en && (count == csel);
 
     // 一轮发多少个符号。sym_num = 0 在循环发下当作"一整张表"：上电默认值和
     // "忘了给符号数"的循环发都还是发整表，和加 sym_num 之前一致。单次发那边 0 仍然

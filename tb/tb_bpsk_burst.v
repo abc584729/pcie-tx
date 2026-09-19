@@ -28,11 +28,25 @@
 //   J single shot, 3 symbols, tsel=3 : gate + burst together
 //   K rd_en low then high            : stops, then re-arms at the next window
 //   L cyclic, sym_num = 7            : laps of 7, not of the whole table
+//   M single shot, tsel=4, csel=0    : the gate moves a whole symbol earlier
+//   N cyclic, tsel=4, csel=100/200   : 100 clk of clock_sel == 100 clk of delay
+//   O csel = 511 at 450k             : the clamp lands on the legacy last clock
+//   P csel = 511 at 400k             : and on 449 there, one reset value, both rates
 //
 // time_sel: the 1024-symbol timebase (bpsk_ram.cnt_1024) drives the read gate.
 // The timebase is incremented by the same divider pulse that reads the table,
 // so the pulse matching time_sel is spent arming tx_en and emits nothing; the
 // first symbol therefore leaves at timebase position time_sel+1.
+//
+// clock_sel picks which clock of that symbol period arms the gate, so the
+// start position is clock-accurate instead of stuck on the 1/Rs grid. Both
+// tx_en and `flag` compare against it: tx_en is a register, so arming at
+// clock_sel and reading at clock_sel puts the first read exactly one symbol
+// period after the arm, i.e. inside timebase position time_sel+1 at clock
+// offset clock_sel. clock_sel = count_max-1 is the old "arm on the divider
+// pulse" behaviour, and anything >= count_max is clamped to it -- that is what
+// keeps an unwritten 0x71C (reset value 511) and the VIO mode bit-identical to
+// the pre-clock_sel design.
 module tb_bpsk_burst;
 
   reg clk = 0;
@@ -42,6 +56,7 @@ module tb_bpsk_burst;
   reg single_shot = 0;
   reg [22:0] sym_num = 0;
   reg [9:0]  time_sel = 0;
+  reg [8:0]  clock_sel = 9'd511;
 
   wire rdata;
   wire rdata_valid;
@@ -57,6 +72,7 @@ module tb_bpsk_burst;
     .rst_n       (rst_n),
     .rd_en       (ram_en),
     .time_sel    (time_sel),
+    .clock_sel   (clock_sel),
     .rate_sel    (rate_sel),
     .w_en        (u_wen),
     .w_addr      (u_waddr),
@@ -78,15 +94,20 @@ module tb_bpsk_burst;
 
   localparam CLK_PER_SYM_450K = 400;
   localparam CLK_PER_SYM_400K = 450;
+  localparam LAST_CLK_450K    = CLK_PER_SYM_450K - 1;   // clock_sel that means "divider pulse"
+  localparam LAST_CLK_400K    = CLK_PER_SYM_400K - 1;
 
-  // rdata_valid lands this many clk after ram_en rises, for time_sel = tsel:
-  // the pulse at the end of symbol tsel arms tx_en (no read), symbol tsel+1 is
-  // the first one read, and the dpram adds one clk of latency.
+  // rdata_valid lands this many clk after ram_en rises, for time_sel = tsel and
+  // clock_sel = csel: the clock at offset csel of symbol tsel arms tx_en (no
+  // read), the same offset one symbol period later is the first one read, and
+  // the dpram adds one clk of latency. csel = per_sym-1 reproduces the old
+  // "arm on the divider pulse" result.
   function integer first_valid_at;
     input integer tsel;
     input integer per_sym;
+    input integer csel;
     begin
-      first_valid_at = per_sym * (tsel + 1) + per_sym - 2;
+      first_valid_at = per_sym * (tsel + 1) + csel - 1;
     end
   endfunction
 
@@ -99,10 +120,12 @@ module tb_bpsk_burst;
   integer exp_period;
   integer k_v, k_gap, k_period, k_prev;      // case K
   integer exp_len;                           // symbols per turn, for this run
+  integer csel_ovr = -1;                     // >= 0 forces clock_sel for the next run()
+  integer m_first, n_first, n_first2;        // sub-symbol cases
 
 
   task check;
-    input [255:0] name;
+    input [511:0] name;              // wide enough for the longest check name
     input integer got;
     input integer exp;
     begin
@@ -124,7 +147,11 @@ module tb_bpsk_burst;
     input integer cycles;
     begin
       @(negedge clk);
+      // csel_ovr < 0 = "leave clock_sel alone and use the legacy last clock";
+      // the sub-symbol cases set it to the value under test.
       ram_en = 0; single_shot = ss; sym_num = n; rate_sel = sel; time_sel = tsel;
+      clock_sel = (csel_ovr < 0) ? ((sel == 1'b1) ? LAST_CLK_400K : LAST_CLK_450K)
+                                 : csel_ovr[8:0];
       exp_len = ((n == 23'd0) && !ss) ? 4194304 : n;   // must match rtl sym_len
 
 
@@ -193,7 +220,7 @@ module tb_bpsk_burst;
     run(1'b1, 23'd5, 1'b0, 10'd0, 4000);
     check("valids", v_cnt, 5);
     check("read pulses", p_cnt, 5);
-    check("first valid at", first_v, first_valid_at(0, CLK_PER_SYM_450K));
+    check("first valid at", first_v, first_valid_at(0, CLK_PER_SYM_450K, LAST_CLK_450K));
     check("last-first", last_v - first_v, 4 * CLK_PER_SYM_450K);
     check("valid period", period, CLK_PER_SYM_450K);
     check("rptr frozen", rptr_end2, rptr_end);
@@ -245,14 +272,14 @@ module tb_bpsk_burst;
     // ---- I: cyclic, time_sel = 5 -> first symbol at position 6 ----
     $display("I: cyclic, time_sel=5");
     run(1'b0, 23'd0, 1'b0, 10'd5, 4000);
-    check("first valid at", first_v, first_valid_at(5, CLK_PER_SYM_450K));
+    check("first valid at", first_v, first_valid_at(5, CLK_PER_SYM_450K, LAST_CLK_450K));
     check("valid period", period, CLK_PER_SYM_450K);
     check("valids in 4000 clk", v_cnt, 4);
 
     // ---- J: single shot at rate_sel = 1 with time_sel = 3 ----
     $display("J: single shot at rate_sel=1, sym_num=3, time_sel=3");
     run(1'b1, 23'd3, 1'b1, 10'd3, 5000);
-    check("first valid at", first_v, first_valid_at(3, CLK_PER_SYM_400K));
+    check("first valid at", first_v, first_valid_at(3, CLK_PER_SYM_400K, LAST_CLK_400K));
     check("valids", v_cnt, 3);
     check("read pulses", p_cnt, 3);
     check("last-first", last_v - first_v, 2 * CLK_PER_SYM_400K);
@@ -300,6 +327,59 @@ module tb_bpsk_burst;
     run(1'b0, 23'd7, 1'b0, 10'd0, 4500);
     check("valids in 4500 clk", v_cnt, 10);
     check("rptr wraps at 6", rptr_err, 0);
+
+    // ---- M: clock_sel = 0 at time_sel = 4 -> a full symbol period earlier ----
+    // Same time_sel as case I, but the gate opens at clock 0 of that symbol
+    // period instead of on the divider pulse: 399 clk sooner, and the period is
+    // unchanged (the gate position must not stretch or squeeze the symbol rate).
+    $display("M: single shot, time_sel=4, clock_sel=0");
+    csel_ovr = 0;
+    run(1'b1, 23'd3, 1'b0, 10'd4, 3500);
+    csel_ovr = -1;
+    check("first valid at", first_v, first_valid_at(4, CLK_PER_SYM_450K, 0));
+    check("valids", v_cnt, 3);
+    check("read pulses", p_cnt, 3);
+    check("valid period", period, CLK_PER_SYM_450K);
+    check("last-first", last_v - first_v, 2 * CLK_PER_SYM_450K);
+
+    // ---- N: clock_sel is linear -- 100 clk of it is 100 clk of delay ----
+    // This is the whole point of the change: the start position moves in single
+    // clocks, not in 1/Rs steps. Two runs 100 apart must land exactly 100 apart.
+    $display("N: cyclic, time_sel=4, clock_sel=100 then 200");
+    csel_ovr = 100;
+    run(1'b0, 23'd0, 1'b0, 10'd4, 3000);
+    m_first = first_v;
+    csel_ovr = 200;
+    run(1'b0, 23'd0, 1'b0, 10'd4, 3000);
+    n_first = first_v;
+    csel_ovr = -1;
+    check("csel=100 first valid at", m_first, first_valid_at(4, CLK_PER_SYM_450K, 100));
+    check("csel=200 first valid at", n_first, first_valid_at(4, CLK_PER_SYM_450K, 200));
+    check("100 clk of clock_sel = 100 clk of delay", n_first - m_first, 100);
+
+    // ---- O: clock_sel >= count_max clamps to the last clock (450k) ----
+    // 511 is the register reset value and what top.vhd drives in VIO mode, so
+    // it must reproduce the pre-clock_sel answer exactly -- same as case I.
+    $display("O: single shot, time_sel=4, clock_sel=511 (clamped)");
+    csel_ovr = 511;
+    run(1'b1, 23'd3, 1'b0, 10'd4, 3500);
+    csel_ovr = -1;
+    check("first valid at (== legacy)", first_v, first_valid_at(4, CLK_PER_SYM_450K, LAST_CLK_450K));
+    check("matches the 450k last clock", first_v, first_valid_at(4, CLK_PER_SYM_450K, 399));
+    check("valids", v_cnt, 3);
+
+    // ---- P: the same 511 at 400k clamps to 449, not 399 ----
+    // One reset value has to mean "the divider pulse" at both rates, which is
+    // why the clamp is against the rate-selected count_max rather than a
+    // hard-coded number.
+    $display("P: single shot, rate_sel=1, time_sel=3, clock_sel=511 (clamped)");
+    csel_ovr = 511;
+    run(1'b1, 23'd3, 1'b1, 10'd3, 3500);
+    csel_ovr = -1;
+    check("first valid at (== case J)", first_v, first_valid_at(3, CLK_PER_SYM_400K, LAST_CLK_400K));
+    check("clamped to 449, not 399", first_v, first_valid_at(3, CLK_PER_SYM_400K, 449));
+    check("valids", v_cnt, 3);
+    check("last-first", last_v - first_v, 2 * CLK_PER_SYM_400K);
 
     if (errors == 0) $display("ALL CHECKS PASSED");
     else             $display("FAILED CHECKS: %0d", errors);

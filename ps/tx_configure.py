@@ -49,6 +49,13 @@ socket has no frame header and no CRC):
     rate_sel changes both the symbol rate and the truncation in the adders,
     so after switching it you have to re-upload the symbol table (case 134).
 
+    It also changes what a bpsk sub-symbol start offset means: 0x71C
+    (clock_sel) is "which clock inside the symbol period", and a symbol is
+    400 clocks at 450k but 450 at 400k. case 135 does the split with whatever
+    tx_rate_sel is at the time, so switching the rate leaves the old 0x71C
+    meaning a different fraction of a symbol -- re-send the tx_start.py packet
+    after a --rate change to have it recomputed.
+
     The ARM (Zynq) is little-endian and the C side copies the double with
     memcpy(&double, &pBuf[off], 8), so each double is packed with '<d'.
 
@@ -130,7 +137,11 @@ def main():
     ap.add_argument('--qpsk-atten', type=float, default=DEF_ATTEN, help='QPSK attenuation dB (default %g)' % DEF_ATTEN)
     ap.add_argument('--rate', type=int, default=DEF_RATE, choices=(0, 1),
                     help='symbol rate select: 0 = bpsk 450k/qpsk 4.5M, '
-                         '1 = bpsk 400k/qpsk 6.667M (default %d)' % DEF_RATE)
+                         '1 = bpsk 400k/qpsk 6.667M (default %d); switching it '
+                         'needs a case 134 table re-upload and a fresh '
+                         'tx_start.py packet (the bpsk sub-symbol start offset '
+                         'is counted in clocks, and a symbol is 400 clocks at '
+                         '450k but 450 at 400k)' % DEF_RATE)
     ap.add_argument('--dry-run', action='store_true', help='build/print packet only, do not send')
     args = ap.parse_args()
 

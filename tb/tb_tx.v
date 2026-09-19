@@ -119,6 +119,7 @@ module tb_tx(
         .bpsk_sym_num      (23'd0),   // cyclic + 0 = whole table per turn
         .bpsk_single_shot  (1'b0),
         .bpsk_time_sel     (10'd0),
+        .bpsk_clock_sel    (9'd511),  // >= count_max -> last clock, as before
         .iq             (iq),
         .bpsk_sig_valid (bpsk_sig_valid),
         .qpsk_sig_valid (qpsk_sig_valid)

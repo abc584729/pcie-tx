@@ -21,7 +21,15 @@
 #define TX_REG_BPSK_SYM_NUM_L   (0x712)    /* bpsk 单次发符号数低 16 位（0x714 = 高 7 位） */
 #define TX_REG_BPSK_SYM_NUM_H   (0x714)    /* bpsk 单次发符号数高 7 位（仅 bit6:0 有效，整表 4194304 个符号） */
 #define TX_REG_BPSK_SINGLE_SHOT (0x716)    /* bpsk 发射模式：bit0 = 0 循环发（默认），1 单次发满符号数就停 */
-#define TX_REG_BPSK_TIME_SEL    (0x718)    /* bpsk 起始时基：0..1023，1024 个符号一圈，时基计数走到该值时打开读门 */
+#define TX_REG_BPSK_TIME_SEL    (0x718)    /* bpsk 起始时基（整符号部分）：0..1023，1024 个符号一圈，
+                                            * 时基计数走到该值那一圈才打开读门。和 0x71C 一起用，
+                                            * 两个都写进 bpsk_ram 才决定开闸点 */
+#define TX_REG_BPSK_CLOCK_SEL   (0x71C)    /* bpsk 圈内开闸点：0..count_max-1（450k 0..399，400k 0..449），
+                                            * 时基走到 time_sel 那一圈、圈内第 clock_sel 拍才开读门。
+                                            * 写 >= count_max 按末拍处理 = 老的"分频脉冲那一拍"行为。
+                                            * 复位值 511，所以不写它就是加这个寄存器之前的行为。
+                                            * 上位机给的是 double（单位 = 符号），adhocSoft.c 的
+                                            * case 135 按 tx_rate_sel 拆成 0x718 + 0x71C 两个值 */
 #define TX_REG_BPSK_BUSY        (0x71A)    /* bpsk 发射状态（只读）：bit0 = 1 正在发射，0 空闲。
                                             * 判据是"0x702 有效且这一轮没发完"：单次发发完
                                             * （done 锁住）或 0x702 拉低后落 0。注意它不等于
@@ -74,15 +82,20 @@ void tx_apply_config(void);
  *               整表重复 —— 读指针低 22 位回卷，高位继续进位。
  * single_shot : 0 = 循环发（默认）：每轮发 sym_num 个，数满回到第 0 个符号接着
  *               下一轮，一直循环；1 = 单次发：数满就停（done 锁住）。
- * 注意：写 sym_num 要分两次写寄存器，不是原子操作；请在 tx 复位期间
- *       （emc_write(TX_REG_RESET, 0) 之后、写 1 之前）调用。
- *       要重发有两种办法：脉冲一次 TX_REG_RESET（tx_start.py 就是这条），或者把
- *       TX_REG_RAM_EN 拉低一下 —— rd_en 拉低会一并清掉读指针和符号计数，再拉高
- *       就是从第 0 个符号重新发，不需要复位。
- */
-void set_bpsk_burst(unsigned long sym_num, unsigned char single_shot);
-
 /*
+ * bpsk 起始时基（寄存器 0x718）+ 圈内开闸点（寄存器 0x71C）
+ * tsel : 0x718，整符号部分 0..1023，1024 个符号为一圈（0 = 尽快开始）。
+ * csel : 0x71C，圈内第几拍开闸，0..count_max-1。450k 一圈 400 拍、400k 一圈 450 拍，
+ *        和 bpsk_ram 的 COUNT_MAX_450K / COUNT_MAX_400K 一致。写 >= count_max
+ *        按末拍处理，也就是加这两个寄存器之前"分频脉冲那一拍开门"的老行为。
+ * 两个一起决定读门什么时候开：时基走到 tsel 那一圈的 csel 拍。时基和读脉冲同源，
+ * 开闸那一拍本身不读表，所以实际发出的第一个符号落在时基位置 tsel + 1，圈内偏移
+ * 由 csel 给出 —— 时间校准粒度是 1 拍，不再是 1/Rs。
+ * 时基只在 rst_n（tx 复位）时清零，写晚了要等这一圈走完才轮到这个值。
+ * 所以 tx_start()（case 135）在复位窗口里把两个都写下去。
+ */
+void set_bpsk_time_sel(unsigned short tsel);
+void set_bpsk_clock_sel(unsigned short csel);
  * bpsk 起始时基（寄存器 0x718）
  * tsel : 0..1023，1024 个符号为一圈。时基和读脉冲同源，所以匹配上的那个
  *        脉冲用来开读门、本身不读表：实际发出的第一个符号落在时基位置

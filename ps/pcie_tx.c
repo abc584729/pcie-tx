@@ -17,9 +17,12 @@ extern u8     tx_rate_sel;
 extern u8     tx_bpsk_single_shot;   /* bpsk 发射模式：0 循环发（默认），1 单次发 */
 extern u32    tx_bpsk_sym_num;       /* bpsk 单次发符号数，0 = 不发。case 135 给的是数据文件
                                      * 大小(kB)，adhocSoft.c 按每符号 1 bit 换算成 bit 数 */
-extern u16    tx_bpsk_time_sel;      /* bpsk 起始时基：0..1023，1024 个符号一圈，时基走到该值才开读门
-                                     * （0 = 尽快开始）；实际第一个符号落在时基位置 time_sel + 1。
-                                     * case 135 存进来，tx_start() 在复位窗口里写下去 */
+extern u16    tx_bpsk_time_sel;      /* bpsk 起始时基（整符号部分）：0..1023，1024 个符号一圈，时基走到
+                                     * 该值那一圈才开读门（0 = 尽快开始）；实际第一个符号落在
+                                     * 时基位置 time_sel + 1，圈内偏移由 tx_bpsk_clock_sel 给出 */
+extern u16    tx_bpsk_clock_sel;     /* bpsk 圈内开闸点：0..count_max-1，写 >= count_max 按末拍处理。
+                                     * case 135 把上位机给的 double 按 tx_rate_sel 拆出来，
+                                     * tx_start() 在复位窗口里和 time_sel 一起写下去 */
 
 /*
  * DDS 频点配置公共函数
@@ -174,12 +177,24 @@ void set_bpsk_burst(unsigned long sym_num, unsigned char single_shot)
     else if (sym_num == 0)
         printf("bpsk burst : mode = cyclic, whole table (%lu symbols) per turn \r\n",
                4194304UL);
-    else
-        printf("bpsk burst : sym_num = %lu per turn, mode = cyclic \r\n", sym_num);
-}
-
 void set_bpsk_time_sel(u16 tsel)
 {
+    emc_write(TX_REG_BPSK_TIME_SEL, (u16)(tsel & 0x3FF));
+    printf("bpsk time sel : %u \r\n", (unsigned)(tsel & 0x3FF));
+}
+
+/*
+ * bpsk 圈内开闸点（寄存器 0x71C）
+ * csel : 0..count_max-1（450k 一圈 400 拍、400k 一圈 450 拍）。写 >= count_max 时
+ *        bpsk_ram 按末拍处理，等于加这个寄存器之前"分频脉冲那一拍开闸"的老行为；
+ *        复位值是 511，所以不写它也是老行为，一个复位值管住两种速率。
+ * 和 0x718 一起决定读门什么时候开，配成一个时间校准点，必须一起写。
+ */
+void set_bpsk_clock_sel(u16 csel)
+{
+    emc_write(TX_REG_BPSK_CLOCK_SEL, (u16)(csel & 0x1FF));
+    printf("bpsk clock sel : %u \r\n", (unsigned)(csel & 0x1FF));
+}
     emc_write(TX_REG_BPSK_TIME_SEL, (u16)(tsel & 0x3FF));
     printf("bpsk time sel : %u \r\n", (unsigned)(tsel & 0x3FF));
 }
@@ -228,6 +243,7 @@ void tx_start(void)
     set_bpsk_burst(tx_bpsk_sym_num, tx_bpsk_single_shot);  
 
     set_bpsk_time_sel(tx_bpsk_time_sel);
+    set_bpsk_clock_sel(tx_bpsk_clock_sel);  /* 和 time_sel 配成一个开闸点，必须一起写 */
 
     set_bpsk_enable(ctrl_bpsk);     /* bpsk 使能 */
     set_qpsk_enable(ctrl_qpsk);     /* qpsk 使能 */

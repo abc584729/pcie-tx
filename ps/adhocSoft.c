@@ -89,9 +89,16 @@ u8  tx_bpsk_single_shot = 0;    /* bpsk 发射模式：0 循环发（默认），1 单次发。
                                  * case 135（tx_start.py）配置，tx_start() 写下去（默认值和不带参数一致） */
 u32 tx_bpsk_sym_num = 0;        /* bpsk 单次发要发的符号数，0 = 不发。case 135 里给的是数据文件大小(kB)，
                                  * 按 BPSK 每符号 1 bit 换算而来（kB x 1024 x 8）；上限 23 位 = 8388607 */
-u16 tx_bpsk_time_sel = 0;       /* bpsk 起始时基：0..1023，1024 个符号一圈，时基走到这个值才开读门
-                                 * （0 = 尽快开始）。case 135 的第 10..11 字节（u16 小端），
-                                 * 和单次发/符号数一起解出来，在 tx_start() 复位窗口里写下去 */
+u16 tx_bpsk_time_sel = 0;       /* bpsk 起始时基（整符号部分）：0..1023，1024 个符号一圈，时基走到
+                                 * 这个值那一圈才开读门（0 = 尽快开始）。上位机给的是 double
+                                 * （单位 = 符号，第 10..17 字节，小端），case 135 把它拆成整符号
+                                 * 部分（本变量）和圈内拍数（tx_bpsk_clock_sel），两个都在
+                                 * tx_start() 的复位窗口里写下去 */
+u16 tx_bpsk_clock_sel = 0;      /* bpsk 圈内开闸点：0..count_max-1（450k 是 0..399，400k 是
+                                 * 0..449），时基走到 time_sel 那一圈、圈内第 clock_sel 拍才开
+                                 * 读门。= count_max-1 就是老的"分频脉冲那一拍"行为；小于它把
+                                 * 开闸点在圈内往前挪，做比 1/Rs 更细的时间校准。
+                                 * 注意小数换算是按 tx_rate_sel 算的，换速率要重发 case 135 */
 //20260902
 
 #if 1
@@ -1547,11 +1554,12 @@ void ProcCmd(unsigned char *pBuf, U16 len)
 		case 135:
 		{
 			double size_kb = 0.0;
+			double tsel_d  = 0.0;
 
 			/* 新命令没有老包要兼容，超长/超短的包都不认 —— 宁可丢包也不猜 */
-			if (len < 12)
+			if (len < 18)
 			{
-				printf("tx start: bad len %d (expect 12), dropped\r\n", len);
+				printf("tx start: bad len %d (expect 18), dropped\r\n", len);
 				break;
 			}
 
@@ -1573,15 +1581,30 @@ void ProcCmd(unsigned char *pBuf, U16 len)
 			}
 			tx_bpsk_sym_num = (u32)(size_kb * 8192.0 + 0.5);    /* kB -> 字节 -> bit */
 
-			/* 10..11 字节 u16 小端：起始时基 0..1023，时基走到这个值才开读门
-			 * （0 = 尽快开始），实际第一个符号落在 time_sel + 1。10 位寄存器，
-			 * 超范围钳到 1023 而不是丢包 —— 长度对就认，值不合法也别空发。 */
-			tx_bpsk_time_sel = (u16)(pBuf[10] | ((u16)pBuf[11] << 8));
-			if (tx_bpsk_time_sel > 1023)
+			/* 10..17 字节 double：开闸位置，单位 = 符号，带小数。超范围钳住，不丢包 ——
+			 * 长度对就认，值不合法也别空发。整符号部分给 time_sel（10 位时基 0..1023），
+			 * 小数部分按当前速率换算成圈内第几拍给 clock_sel：450k 一个符号 400 拍、
+			 * 400k 是 450 拍，和 bpsk_ram 的 COUNT_MAX_450K / COUNT_MAX_400K 一致，
+			 * 所以 0.25 在两种速率下都是"四分之一个符号"，是同一段真实时间。
+			 * 换算用的是 tx_rate_sel，换速率要重发 case 135 才会跟着变。 */
+			memcpy(&tsel_d, &pBuf[10], 8);
+			if (tsel_d < 0.0)
+				tsel_d = 0.0;
+			if (tsel_d >= 1024.0)
 			{
-				printf("tx bpsk time sel: %d out of range (0..1023), clamped\r\n",
-				       (int)tx_bpsk_time_sel);
-				tx_bpsk_time_sel = 1023;
+				printf("tx bpsk time sel: %.6f out of range (0..<1024), clamped\r\n", tsel_d);
+				tsel_d = 1024.0 - 1e-9;
+			}
+			{
+				double per_sym = (tx_rate_sel == 1) ? 450.0 : 400.0;   /* bpsk_ram 的 count_max */
+				u32    ts      = (u32)tsel_d;                            /* 整符号部分 */
+				double frac    = tsel_d - (double)ts;
+				u32    cs      = (u32)(frac * per_sym + 0.5);            /* 小数 -> 圈内第几拍 */
+
+				if (ts > 1023) ts = 1023;
+				if (cs > (u32)per_sym) cs = (u32)per_sym;                /* 进位到整拍了 */
+				tx_bpsk_time_sel  = (u16)ts;
+				tx_bpsk_clock_sel = (u16)cs;
 			}
 
 			printf("tx bpsk burst: size = %.6f kB -> %d bits (symbols)\r\n",
@@ -1591,9 +1614,10 @@ void ProcCmd(unsigned char *pBuf, U16 len)
 
 			tx_start();
 
-			printf("tx started: rate = %d, time_sel = %d "
-			       "(first symbol at timebase position %d).\r\n",
-			       (int)tx_rate_sel, (int)tx_bpsk_time_sel, (int)tx_bpsk_time_sel + 1);
+			printf("tx started: rate = %d, time_sel = %d + clock_sel = %d/%d "
+			       "(arm at %.6f, first symbol at %.6f).\r\n",
+			       (int)tx_rate_sel, (int)tx_bpsk_time_sel, (int)tx_bpsk_clock_sel,
+			       (tx_rate_sel == 1) ? 450 : 400, tsel_d, tsel_d + 1.0);
 			break;
 		}
 //20260902 edit

@@ -24,9 +24,10 @@ socket has no frame header and no CRC):
                                        size of the symbol-table data file, in
                                        kB (1024-based, like the K/M/G suffixes
                                        of gen_symbol_table.py)
-    10..11   bpsk_time_sel              u16 (2B, little-endian) 0..1023
+    10..17   bpsk_time_sel              double (8B, little-endian IEEE-754)
+                                       0 <= x < 1024, unit = symbols
 
-    Total length = 12 bytes.
+    Total length = 18 bytes.
 
     bpsk_size_kb is the size of the .bin that was uploaded with case 134, so
     "send exactly what I just uploaded" needs no arithmetic on the host side.
@@ -59,6 +60,27 @@ socket has no frame header and no CRC):
     the very first pulse after reset (= start as soon as possible). Only the
     PS path uses it -- in VIO mode the top level ties it to 0.
 
+    It is a *fractional* symbol position, so the calibration is no longer
+    stuck on the 1/Rs grid. The board splits it into two hardware registers
+    (0x718 and 0x71C) using the current rate, because a symbol is 400 clocks
+    at 450k but 450 clocks at 400k:
+
+        time_sel  = floor(x)                        (0x718, 0..1023)
+        clock_sel = round((x - floor(x)) * count_max)  (0x71C)
+
+    with count_max = 400 (450k) or 450 (400k). So the fractional part always
+    means the same *fraction of a symbol*, i.e. the same real time at either
+    rate: --tsel 500.25 is a quarter symbol into symbol 500. The conversion
+    happens in case 135 and reads tx_rate_sel there, so changing the rate
+    afterwards needs another case 135 to move the sub-symbol offset with it.
+
+    Resolution caveat: the read gate itself is now clock-accurate, but the
+    sample still has to cross upsamping_450k / 400k, whose first
+    zero_interpolator latches the bit and emits it on the next slot of its own
+    free-running /50 counter. The RF envelope therefore only moves in 50-clock
+    steps -- 1/8 of a symbol, about 278 ns at 180 MHz -- so x is quantised
+    onto that grid even though finer values are accepted.
+
     It is written inside the tx_start() reset window (reset is pulsed at step
     5, the register is written at step 4), so the timebase counter is held at
     0 while it lands and the value is always ahead of the counter: no waiting
@@ -82,7 +104,8 @@ Examples:
     python tx_start.py --single 1 --size 1.953125   # a 2000-byte file
     python tx_start.py --single 0                   # cyclic, whole table per turn
     python tx_start.py --tsel 500                   # open the gate at count 500
-    python tx_start.py --single 1 --size 256 --tsel 500
+    python tx_start.py --tsel 500.25                # a quarter symbol later
+    python tx_start.py --single 1 --size 256 --tsel 500 --rate 0
     python tx_start.py --single 0 --dry-run
 """
 
@@ -96,10 +119,15 @@ OFF_SINGLE_SHOT = 1
 OFF_SIZE_KB = 2
 OFF_TIME_SEL = 10
 
-PKT_LEN = 12            # cmd + single_shot + size_kb + time_sel
+PKT_LEN = 18            # cmd + single_shot + size_kb + time_sel
 
-# time_sel is 10 bit: 1024 symbols per timebase frame
+# time_sel: 1024 symbols per timebase frame, integer part 0..1023 and a
+# fractional part that the board turns into a sub-symbol clock offset.
 TIME_SEL_MAX = 1023
+
+# clocks per symbol in bpsk_ram: COUNT_MAX_450K / COUNT_MAX_400K
+CLK_PER_SYM_450K = 400
+CLK_PER_SYM_400K = 450
 
 # The symbol table is 262144 x 16 bit = 512 kB of file = 2^22 bit = 2^22 symbols
 TABLE_KB = 512.0        # one full pass over the BPSK table
@@ -108,7 +136,19 @@ SIZE_KB_MAX = ((1 << 23) - 1) / float(BITS_PER_KB)   # 23-bit counter, ~1024 kB
 
 DEF_SINGLE = 1         # 1 = single shot (this command exists to fire a burst)
 DEF_SIZE_KB = 0.0      # 0 = send nothing in single-shot mode
-DEF_TIME_SEL = 0       # 0 = open the read gate on the first pulse (start ASAP)
+DEF_TIME_SEL = 0.0     # 0 = open the read gate on the first pulse (start ASAP)
+
+
+def split_time_sel(tsel, rate):
+    """Mirror of adhocSoft.c case 135: symbol position -> (time_sel, clock_sel)."""
+    count_max = CLK_PER_SYM_400K if rate == 1 else CLK_PER_SYM_450K
+    ts = int(tsel)                                   # truncate, like the C cast
+    cs = int((tsel - ts) * count_max + 0.5)          # round to the nearest clock
+    if ts > TIME_SEL_MAX:
+        ts = TIME_SEL_MAX
+    if cs > count_max:                               # the fraction rounded up
+        cs = count_max
+    return ts, cs
 
 
 def parse_size_kb(text):
@@ -134,12 +174,12 @@ def parse_size_kb(text):
 
 
 def build_packet(single_shot, size_kb, time_sel):
-    """Pack the payload per the case 135 layout; return bytes(12)."""
+    """Pack the payload per the case 135 layout; return bytes(18)."""
     buf = bytearray(PKT_LEN)
     buf[0] = CMD_TX_START
     buf[OFF_SINGLE_SHOT] = int(single_shot) & 0x1
     struct.pack_into('<d', buf, OFF_SIZE_KB, float(size_kb))
-    struct.pack_into('<H', buf, OFF_TIME_SEL, int(time_sel) & 0x3FF)
+    struct.pack_into('<d', buf, OFF_TIME_SEL, float(time_sel))
     return bytes(buf)
 
 
@@ -160,35 +200,41 @@ def main():
     ap.add_argument('--ip', default='192.168.1.10', help='node IP (default 192.168.1.10)')
     ap.add_argument('--port', type=int, default=14147, help='node ctrl port (default 14147)')
     ap.add_argument('--rate', type=int, choices=(0, 1),
-                    help='symbol rate of the *current* board setup, for the printout '
-                         'only (0 = bpsk 450k, 1 = bpsk 400k); this packet does not '
-                         'carry it, set it with tx_configure.py --rate')
+                    help='symbol rate of the *current* board setup (0 = bpsk 450k, '
+                         '1 = bpsk 400k); the packet does not carry it -- set it with '
+                         'tx_configure.py --rate. It only affects the printout here, '
+                         'but the board uses its own tx_rate_sel to turn the fractional '
+                         'part of --tsel into a sub-symbol clock offset, so keep the two '
+                         'in step or the offset means a different real time')
     ap.add_argument('--single', type=int, default=DEF_SINGLE, choices=(0, 1),
                     help='BPSK mode: 0 = cyclic, 1 = single shot (default %d)' % DEF_SINGLE)
     ap.add_argument('--size', default=str(DEF_SIZE_KB),
                     help='size of the uploaded symbol-table file, in kB (1024-based, '
                          'K/M suffix ok) or "full" for the whole %g kB table; '
                          'default %g' % (TABLE_KB, DEF_SIZE_KB))
-    ap.add_argument('--tsel', type=int, default=DEF_TIME_SEL,
-                    help='BPSK start position in the 1024-symbol timebase, 0..%d: the read '
-                         'gate opens when the timebase count reaches it, so the first '
-                         'symbol sent sits at position tsel+1; 0 = start as soon as '
-                         'possible (default %d)' % (TIME_SEL_MAX, DEF_TIME_SEL))
+    ap.add_argument('--tsel', type=float, default=DEF_TIME_SEL,
+                    help='BPSK start position in the 1024-symbol timebase, 0 <= x < 1024, '
+                         'fractional allowed: the read gate opens when the timebase '
+                         'reaches floor(x) and the symbol period is round((x-floor(x))*'
+                         'count_max) clocks in, so the first symbol sent sits at position '
+                         'x+1; 0 = start as soon as possible (default %g)' % DEF_TIME_SEL)
     ap.add_argument('--dry-run', action='store_true', help='build/print packet only, do not send')
     args = ap.parse_args()
 
-    if not 0 <= args.tsel <= TIME_SEL_MAX:
-        raise SystemExit('--tsel %d out of range: 0..%d' % (args.tsel, TIME_SEL_MAX))
+    if not 0.0 <= args.tsel < 1024.0:
+        raise SystemExit('--tsel %g out of range: 0 <= x < 1024' % args.tsel)
 
     size_kb = parse_size_kb(args.size)
     pkt = build_packet(args.single, size_kb, args.tsel)
 
     # what adhocSoft.c will make of it: BPSK is 1 bit per symbol
     sym_num = int(size_kb * BITS_PER_KB + 0.5)
-    tsel = struct.unpack_from('<H', pkt, OFF_TIME_SEL)[0]
+    tsel = struct.unpack_from('<d', pkt, OFF_TIME_SEL)[0]
 
     rs = 400e3 if args.rate == 1 else 450e3       # bpsk symbol rate
     rate_label = '400 kHz' if args.rate == 1 else '450 kHz'
+    ts_int, ts_clk = split_time_sel(tsel, args.rate)
+    count_max = CLK_PER_SYM_400K if args.rate == 1 else CLK_PER_SYM_450K
 
     if not pkt[OFF_SINGLE_SHOT]:
         turn = ('the whole table (4194304 symbols)' if sym_num == 0
@@ -207,10 +253,17 @@ def main():
     print('burst   : single_shot=%d  size=%.6f kB (%d bytes) -> %d bits'
           % (pkt[OFF_SINGLE_SHOT], size_kb, int(round(size_kb * 1024)), sym_num))
     print('          %s' % burst)
-    print('time_sel: %d  (first symbol at position %d)' % (tsel, tsel + 1))
+    print('time_sel: %g  (first symbol at position %g)' % (tsel, tsel + 1))
+    print('          0x718 = %d, 0x71C = %d/%d clk  [%s, assumes tx_configure.py --rate '
+          'matches]' % (ts_int, ts_clk, count_max, rate_label))
     if tsel:
-        print('          gate opens on the lap pulse that reaches %d, no waiting: the '
-              'value lands while reset holds the timebase at 0' % tsel)
+        print('          gate opens at timebase %d, clock %d of that symbol period; no '
+              'waiting: both values land while reset holds the timebase at 0'
+              % (ts_int, ts_clk))
+    if ts_clk % 50:
+        print('          note: the RF envelope only moves in 50-clk steps (the first '
+              'zero_interpolator slot grid, 1/8 symbol), so this offset lands on clock '
+              '%d of that grid' % (ts_clk - ts_clk % 50))
     print('note    : tx_start() runs on the board -- freq / atten / enable / rate '
           'come from the last tx_configure.py.')
     print(hex_dump(pkt))

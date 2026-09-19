@@ -48,6 +48,7 @@ module tb_bpsk_rate;
     .sym_num     (23'd0),      // cyclic + 0 = the whole table, as before sym_num existed
     .single_shot (1'b0),
     .time_sel    (10'd0),      // cyclic: gate opens with the timebase at 0
+    .clock_sel   (9'd511),     // >= count_max -> last clock of the symbol, i.e. as before
     .sig_i       (sig_i),
     .sig_q       (sig_q)
   );
@@ -81,6 +82,24 @@ module tb_bpsk_rate;
     end
   endtask
 
+  // time_sel = 0 means "open the read gate on the first lap pulse", and the
+  // timebase (cnt_1024) is only reset by rst_n -- the 262144-word fill above
+  // runs with rst_n already high, so by the time a phase starts the timebase is
+  // parked around 286 and no lap pulse in the phase would ever match 0. Pulse
+  // the reset the host pulses too (TX_REG_RESET via 0x700, then RAM_EN): the
+  // divider, the timebase and the read pointer all go back to 0, so the phase
+  // measures the gate from a known origin instead of from wherever the fill
+  // left it.
+  task reset_timebase;
+    begin
+      @(negedge clk) ram_en = 0;
+      @(negedge clk) rst_n = 0;
+      repeat (4) @(negedge clk);
+      @(negedge clk) rst_n = 1;
+      @(negedge clk) ram_en = 1;
+    end
+  endtask
+
   initial begin
     // ---- fill the table ----
     rst_n = 0;
@@ -96,7 +115,7 @@ module tb_bpsk_rate;
     rate_sel = 0; ram_en = 0;
     last_flag = -1; period_450k = -1;
     mism_450 = 0; mism_400 = 0; nz450 = 0; nz400 = 0; nzsel = 0;
-    @(negedge clk) ram_en = 1;
+    reset_timebase;              // leaves ram_en = 1, divider at 0
     for (t = 0; t < PHASE; t = t + 1) begin
       @(posedge clk); #1;
       if (rd_flag) begin
@@ -113,6 +132,7 @@ module tb_bpsk_rate;
     rate_sel = 1;
     last_flag = -1; period_400k = -1;
     mism_450 = 0; mism_400 = 0; nz450 = 0; nz400 = 0; nzsel = 0;
+    reset_timebase;
     for (t = 0; t < PHASE; t = t + 1) begin
       @(posedge clk); #1;
       if (rd_flag) begin

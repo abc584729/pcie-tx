@@ -37,9 +37,12 @@ To transmit again, either
 
   * re-open the gate with 0x702 = 1 -- one write, no reset, so the timebase
     carries straight on (the gate reopens only on the single clock where
-    cnt_1024 == time_sel, so resumption can take up to one lap: 1024 symbols,
-    ~2.276 ms at 450k / ~2.56 ms at 400k). No script here sends that write on
-    its own -- tx_start() always pulses the reset; or
+    cnt_1024 == time_sel AND count == clock_sel, so resumption can take up to
+    one lap: 1024 symbols, ~2.276 ms at 450k / ~2.56 ms at 400k). It uses the
+    0x718 / 0x71C values already in the registers -- this path rewrites
+    neither, so the start point, sub-symbol offset included, does not move.
+    No script here sends that write on its own -- tx_start() always pulses the
+    reset; or
   * run tx_start.py (case 135), which pulses TX_REG_RESET inside tx_start().
     Same effect, but the timebase restarts from 0, so the burst comes up at
     the --tsel position of that packet rather than where the previous one sat.

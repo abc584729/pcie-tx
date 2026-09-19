@@ -373,6 +373,8 @@ signal		bpsk_single_shot_mux :   STD_LOGIC;
 -- 上电默认走 vio_tx，等价于"复位后第一拍就开门"；切到 PS 才由寄存器 0x718 决定。
 signal		bpsk_time_sel_ps     :   STD_LOGIC_VECTOR(9 downto 0);
 signal		bpsk_time_sel_mux    :   STD_LOGIC_VECTOR(9 downto 0);
+signal		bpsk_clock_sel_ps    :   STD_LOGIC_VECTOR(8 downto 0);
+signal		bpsk_clock_sel_mux   :   STD_LOGIC_VECTOR(8 downto 0);
 
 -- vio/ps 选择信号（0:使用 vio_tx，1:使用 PS）
 signal      tx_sel_vio_ps : STD_LOGIC_VECTOR(0 downto 0);
@@ -443,6 +445,7 @@ COMPONENT tx_top
     bpsk_sym_num    : in STD_LOGIC_VECTOR(22 DOWNTO 0);
     bpsk_single_shot: in STD_LOGIC;
     bpsk_time_sel   : in STD_LOGIC_VECTOR(9 DOWNTO 0);
+    bpsk_clock_sel  : in STD_LOGIC_VECTOR(8 DOWNTO 0);
     iq: OUT STD_LOGIC_VECTOR(255 DOWNTO 0);
     bpsk_sig_valid: OUT STD_LOGIC;
     qpsk_sig_valid: OUT STD_LOGIC;
@@ -1353,6 +1356,7 @@ component ps_interface_1 is
         bpsk_sym_num_ps     : out STD_LOGIC_VECTOR(22 downto 0);
         bpsk_single_shot_ps : out STD_LOGIC;
         bpsk_time_sel_ps    : out STD_LOGIC_VECTOR(9 downto 0);
+        bpsk_clock_sel_ps   : out STD_LOGIC_VECTOR(8 downto 0);
         bpsk_tx_busy        : in  STD_LOGIC
   );
 end component;
@@ -3935,6 +3939,7 @@ Port map (
         bpsk_sym_num_ps     => bpsk_sym_num_ps,
         bpsk_single_shot_ps => bpsk_single_shot_ps,
         bpsk_time_sel_ps    => bpsk_time_sel_ps,
+        bpsk_clock_sel_ps   => bpsk_clock_sel_ps,
         bpsk_tx_busy        => bpsk_tx_busy
 );
 
@@ -4809,6 +4814,9 @@ atten_bpsk_mux <= atten_bpsk     when tx_sel_vio_ps(0) = '0' else atten_bpsk_ps;
 atten_qpsk_mux <= atten_qpsk     when tx_sel_vio_ps(0) = '0' else atten_qpsk_ps;
 bpsk_single_shot_mux <= '0'          when tx_sel_vio_ps(0) = '0' else bpsk_single_shot_ps;
 bpsk_time_sel_mux    <= (others => '0') when tx_sel_vio_ps(0) = '0' else bpsk_time_sel_ps;
+-- VIO 路径 bpsk_clock_sel 接全 1（511 >= count_max）：按末拍处理，
+-- 等价于加 clock_sel 之前的"分频脉冲那一拍开闸"，VIO 下行为不变。
+bpsk_clock_sel_mux   <= (others => '1') when tx_sel_vio_ps(0) = '0' else bpsk_clock_sel_ps;
  
  u_tx_top: tx_top
   PORT MAP (
@@ -4834,6 +4842,7 @@ bpsk_time_sel_mux    <= (others => '0') when tx_sel_vio_ps(0) = '0' else bpsk_ti
     bpsk_sym_num       => bpsk_sym_num_ps,
     bpsk_single_shot   => bpsk_single_shot_mux,
     bpsk_time_sel      => bpsk_time_sel_mux,
+    bpsk_clock_sel     => bpsk_clock_sel_mux,
     iq            => iq,
     bpsk_sig_valid => bpsk_sig_valid,
     qpsk_sig_valid => qpsk_sig_valid,

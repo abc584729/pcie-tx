@@ -34,6 +34,7 @@ module bpsk(
         input [22:0] sym_num,        // burst length in symbols (single_shot only)
         input single_shot,           // 0 = cyclic (default), 1 = stop after sym_num
         input [9:0] time_sel,        // 1024-symbol timebase position the read gate opens at
+        input [8:0] clock_sel,       // clock within that symbol period (>= count_max = last clock)
         output [127:0] sig_i, sig_q,
         output sig_valid,            // 8 lanes' complex-multiplier valids OR'ed into one
         output tx_busy               // 1 = this chain is transmitting (see bpsk_ram busy)
@@ -51,6 +52,7 @@ module bpsk(
         .sym_num       (sym_num),
         .single_shot   (single_shot),
         .time_sel      (time_sel),
+        .clock_sel     (clock_sel),
         .rdata         (bit),
         .rdata_valid   (bit_valid),
         .busy          (tx_busy)
