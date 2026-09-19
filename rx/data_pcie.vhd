@@ -345,7 +345,7 @@ port map(
 U22 : ila_data_dds_downsample
 port map(
     clk    => clk,
-    probe1(0) => dds_dout_valid,
+    probe0 => dds_dout_iq,
     probe1 => (0 => dds_dout_valid)
 );
 

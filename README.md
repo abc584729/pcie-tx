@@ -830,7 +830,7 @@ VHDL 这条链本仓库仿真不了（缺 `rx_data_types` 包），靠人工核�
 | 文件 | 模块 | 说明 |
 |------|------|------|
 | `rtl/downsample_8_par.v` | `downsample_8_par` | **手写**。128 bit（8 样点）/`clk_enable` 进、1 样点出，49 抽头 7 相多相抽取，对 `matlab/downsampling/hdlsrc/d_8/d_8.v` 逐比特一致 |
-| `rtl/downsample_4.v` | `downsample_4` | **`d_4.v` 原样搬入**，只改模块名和头注释，数据通路一字不动。62 抽头，**没有 `ce_out`**，÷4 由外部把 `clk_enable` 做成 4 拍一次实现 |
+| `rtl/downsample_4.v` | `downsample_4` | **`d_4.v` 原样搬入**，只改模块名和头注释，数据通路一字不动。62 抽头；每个 `d_8` 输出都进入 FIR，滤波后由外部每 4 个结果保留一个 |
 | `rtl/downsample_45m.v` | `downsample_45m` | 顶层。256 bit RFDC IQ 总线 `{q7,i7,...,q0,i0}` 进、32 bit `{q,i}` 出，`dout_valid` 4 拍一次 |
 
 `d_8.v` 必须手写的原因和当年抗镜像滤波器一样：它每个 `clk_enable` 只吃 1 个样点
@@ -859,8 +859,8 @@ module downsample_45m(
   lane0 = 组内最早的样点。
 - `din_valid` 做成输入而不是硬接 1，是为了让 testbench 能把本模块和"1 样点/`clk_enable`"
   的生成代码放在同一条时间轴上跑（TB 里把它做成 8 拍一次）。用法与 `upsamping_6667k` 一致。
-- 输入断流后 `dout_valid` 会自己拉低（内部有 16 拍空闲计数做 flush），不会一直举着最后一个
-  样点，下游也就不会把陈旧数据当成连续有效数据。
+- 输入断流后 `ce8_i` 会拉低并直接压低 `dout_valid`，不会一直举着最后一个样点；
+  恢复输入后，有效相位继续随启用的滤波流水线推进。
 
 **验证**（黄金模型 = MATLAB 生成的两个文件，DUT = 手写模块，同一份激励同时喂）：
 
@@ -873,7 +873,9 @@ vvp /tmp/ds45.vvp +mode=0      # 0 噪声 / 1 冲激 / 2 斜坡 / 3 chirp
 vvp /tmp/ds45.vvp +mode=0 +hold=1   # 附加：输入断流后 dout_valid 必须拉低
 ```
 
-四种激励下 I/Q 两路的整条输出流 **0 个不一致**；另外断言了 `dout_valid` 严格 4 拍一次。
+黄金链按 Simulink 的 `d_8 → ↓8 → d_4 → ↓4` 顺序运行：`d_4` 的
+`clk_enable` 接每个有效的 `d_8` 输出，输出端再做 1-in-4 选通。四种激励下 I/Q
+两路的整条输出流 **0 个不一致**；另外断言了 `dout_valid` 严格 4 拍一次。
 
 ### 5.3 在 `rx/data_pcie.vhd` 里的例化
 

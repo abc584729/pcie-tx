@@ -6,12 +6,10 @@
 // Only two things changed: the module name (d_4 -> downsample_4) and
 // this header block. The datapath is untouched.
 //
-// Decimation by 4 is EXTERNAL to this module: it has no ce_out port and
-// its delay line advances only when clk_enable is high, so asserting
-// clk_enable on 1 clock out of 4 makes it a divide-by-4 decimator.
-// That is why this file is used as-is instead of being rewritten:
-// unlike d_8 it needs no parallel form (it already consumes 1 sample
-// per clk_enable, which is exactly what a 180 MHz fabric can feed it).
+// Decimation by 4 is EXTERNAL to this module: this FIR must consume every
+// input sample, and one of every four FILTERED outputs is retained by the
+// wrapper.  clk_enable is only a global pipeline enable; using a 1-in-4
+// pulse here would incorrectly decimate before filtering.
 // See rtl/downsample_8_par.v for the divide-by-8 stage.
 //
 // Filter: 62-tap Direct-Form FIR, Type 2 linear phase,

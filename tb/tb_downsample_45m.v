@@ -14,8 +14,8 @@
 // Both then consume one input sample and emit one 180 MSPS output sample
 // per clk, and the two output streams line up sample for sample.
 //
-// The divide-by-4 stage is external in both: the DUT has an internal 1-in-4
-// counter on din_valid, the golden gets 1-in-4 counter on d_8's ce_out.
+// The divide-by-4 stage is external in both: d_4 consumes every d_8 output,
+// then a delayed 1-in-4 selector retains one filtered result out of four.
 //
 // Stimulus: +mode=0 noise (default) / 1 impulse / 2 ramp / 3 chirp,
 // matching the {'step','ramp','chirp','noise'} set the MATLAB testbench uses.
@@ -41,9 +41,14 @@ module tb_downsample_45m;
   wire g8_ce;
   wire signed [15:0] g4_i, g4_q;
   wire g4_en;
+  wire g4_sel;
+  wire g4_valid;
 
-  reg  [1:0] g_cnt = 0;            // counts d_8 outputs, pulses on the 4th
-  assign g4_en = g8_ce & (g_cnt == 2'd3);
+  reg  [1:0] g_cnt = 0;            // counts d_8 outputs
+  reg  [9:0] g4_sel_del = 0;       // d_4 has 10 enabled pipeline stages
+  assign g4_en    = g8_ce;         // FIR consumes every stage-1 result
+  assign g4_sel   = g8_ce & (g_cnt == 2'd3);
+  assign g4_valid = g8_ce & g4_sel_del[9];
 
   wire reset = ~rst_n;
 
@@ -95,8 +100,14 @@ module tb_downsample_45m;
   always #5 clk = ~clk;
 
   always @(posedge clk or posedge reset) begin
-    if (reset) g_cnt <= 2'd0;
-    else if (g8_ce) g_cnt <= g_cnt + 2'd1;
+    if (reset) begin
+      g_cnt      <= 2'd0;
+      g4_sel_del <= 10'd0;
+    end
+    else if (g8_ce) begin
+      g_cnt      <= g_cnt + 2'd1;
+      g4_sel_del <= {g4_sel_del[8:0], g4_sel};
+    end
   end
 
   initial begin
@@ -170,7 +181,7 @@ module tb_downsample_45m;
         end
         ndut = ndut + 1;
       end
-      if (g4_en) begin
+      if (g4_valid) begin
         $fwrite(fser, "%0d %0d\n", g4_i, g4_q);
         if (nser < SMAX) begin
           si_o[nser] = g4_i;
